@@ -100,7 +100,7 @@
             <h1>100% REAL Chat</h1>
             <div class="user-info">
                 <span id="username-display"></span>
-                <a href="index.html" class="btn">Salir</a>
+                <a href="index.html" class="btn" onclick="localStorage.removeItem('chatUsername'); return true;">Salir</a>
             </div>
         </header>
         <main class="chat-main">
@@ -173,11 +173,8 @@
             // Si el nombre es demasiado largo, redirigir a index
             alert('El nombre de usuario no puede exceder los 15 caracteres');
             window.location.href = 'index.html';
-        } else if (storedUsername && urlUsername !== storedUsername) {
-            // Si intentan cambiar el nombre en la URL, restaurar el nombre guardado
-            window.location.href = `chat.html?username=${encodeURIComponent(storedUsername)}`;
         } else {
-            // Si es la primera vez o todo está correcto, guardar el nombre
+            // Si todo está correcto, guardar el nombre
             localStorage.setItem('chatUsername', urlUsername);
             // Establecer nombre para usar en main.js
             window.username = urlUsername;
