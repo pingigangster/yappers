@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Chat en Tiempo Real
 
-## Getting Started
+Una aplicación web simple de chat en tiempo real creada con Node.js, Express y Socket.io.
 
-First, run the development server:
+## Características
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Mensajes en tiempo real
+- Notificaciones de conexión/desconexión
+- Interfaz de usuario responsiva y amigable
+
+## Instalación
+
+1. Clona este repositorio:
+```
+git clone <url-del-repositorio>
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Instala las dependencias:
+```
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Inicia el servidor:
+```
+npm start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Abre tu navegador y visita:
+```
+http://localhost:3000
+```
 
-## Learn More
+## Cómo funciona
 
-To learn more about Next.js, take a look at the following resources:
+- La aplicación utiliza Socket.io para manejar la comunicación en tiempo real entre los clientes y el servidor.
+- Cuando un usuario envía un mensaje, este se transmite a todos los usuarios conectados.
+- Los mensajes propios aparecen con un estilo diferente en el lado derecho.
+- El sistema muestra notificaciones cuando los usuarios se conectan o desconectan.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tecnologías utilizadas
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Node.js
+- Express
+- Socket.io
+- HTML/CSS/JavaScript
+- Moment.js (para formateo de fechas) 

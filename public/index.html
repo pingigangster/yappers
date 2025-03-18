@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="css/style.css">
+    <title>Iniciar Sesión - Chat en Tiempo Real</title>
+    <style>
+        .login-container {
+            max-width: 500px;
+            margin: 80px auto;
+            padding: 30px;
+            background-color: var(--dark-color);
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            color: #fff;
+        }
+        
+        .login-container h1 {
+            margin-bottom: 20px;
+            color: var(--light-color);
+        }
+        
+        .login-container .logo {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: var(--primary-color);
+        }
+        
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        
+        .login-form input {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        
+        .login-form input:focus {
+            box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb), 0.3);
+        }
+        
+        .login-form button {
+            padding: 15px;
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .login-form button:hover {
+            background-color: var(--secondary-color);
+        }
+        
+        .error-message {
+            color: #ff6b6b;
+            margin-top: -15px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-align: left;
+            display: none;
+        }
+        
+        .welcome-text {
+            margin-bottom: 30px;
+            line-height: 1.6;
+            color: #ccc;
+            font-size: 1.1rem;
+        }
+        
+        .features {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .feature {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 30%;
+        }
+        
+        .feature i {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: var(--secondary-color);
+        }
+        
+        .feature p {
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+        
+        @media (max-width: 700px) {
+            .login-container {
+                margin: 30px 15px;
+                padding: 20px;
+            }
+            
+            .features {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .feature {
+                width: 80%;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <i class="fas fa-comment-dots logo"></i>
+        <h1>Chat en Tiempo Real</h1>
+        
+        <div class="welcome-text">
+            Bienvenido a nuestra plataforma de chat. Ingresa tu nombre para comenzar a chatear con otros usuarios en tiempo real.
+        </div>
+        
+        <form class="login-form" id="login-form">
+            <input 
+                type="text" 
+                id="username" 
+                name="username" 
+                placeholder="Ingresa tu nombre de usuario" 
+                required 
+                minlength="3"
+                maxlength="15"
+                autocomplete="off"
+            >
+            <div class="error-message" id="username-error">
+                El nombre de usuario debe tener entre 3 y 15 caracteres
+            </div>
+            
+            <button type="submit">
+                <i class="fas fa-sign-in-alt"></i> Unirse al Chat
+            </button>
+        </form>
+        
+        <div class="features">
+            <div class="feature">
+                <i class="fas fa-users"></i>
+                <p>Chatea con múltiples usuarios en tiempo real</p>
+            </div>
+            <div class="feature">
+                <i class="fas fa-file-upload"></i>
+                <p>Comparte archivos, imágenes y videos</p>
+            </div>
+            <div class="feature">
+                <i class="fas fa-mobile-alt"></i>
+                <p>Funciona en todos los dispositivos</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('login-form');
+            const usernameInput = document.getElementById('username');
+            const usernameError = document.getElementById('username-error');
+            
+            // Validar el nombre de usuario
+            usernameInput.addEventListener('input', () => {
+                const username = usernameInput.value.trim();
+                
+                if (username.length < 3 || username.length > 15) {
+                    usernameError.style.display = 'block';
+                    usernameInput.setCustomValidity('El nombre debe tener entre 3 y 15 caracteres');
+                } else {
+                    usernameError.style.display = 'none';
+                    usernameInput.setCustomValidity('');
+                }
+            });
+            
+            // Manejar el envío del formulario
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const username = usernameInput.value.trim();
+                
+                if (username.length >= 3 && username.length <= 15) {
+                    // Redirigir a la página de chat con el nombre de usuario como parámetro
+                    window.location.href = `chat.html?username=${encodeURIComponent(username)}`;
+                } else {
+                    usernameError.style.display = 'block';
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
