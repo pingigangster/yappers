@@ -160,12 +160,27 @@
     <script>
         // Verificar si hay un nombre de usuario en la URL
         const params = new URLSearchParams(window.location.search);
-        // Declarar username como propiedad global para poder acceder desde main.js
-        window.username = params.get('username');
+        const urlUsername = params.get('username');
         
-        // Si no hay nombre de usuario, redirigir a la página de inicio
-        if (!window.username) {
+        // Obtener nombre de usuario guardado en localStorage
+        const storedUsername = localStorage.getItem('chatUsername');
+        
+        // Validar nombre de usuario
+        if (!urlUsername) {
+            // Si no hay nombre en la URL, redirigir a index
             window.location.href = 'index.html';
+        } else if (urlUsername.length > 15) {
+            // Si el nombre es demasiado largo, redirigir a index
+            alert('El nombre de usuario no puede exceder los 15 caracteres');
+            window.location.href = 'index.html';
+        } else if (storedUsername && urlUsername !== storedUsername) {
+            // Si intentan cambiar el nombre en la URL, restaurar el nombre guardado
+            window.location.href = `chat.html?username=${encodeURIComponent(storedUsername)}`;
+        } else {
+            // Si es la primera vez o todo está correcto, guardar el nombre
+            localStorage.setItem('chatUsername', urlUsername);
+            // Establecer nombre para usar en main.js
+            window.username = urlUsername;
         }
         
         // Variables de la pantalla de carga

@@ -283,6 +283,15 @@ io.on('connection', async socket => {
     socket.on('joinChat', async ({ username, isFirstVisit }) => {
         console.log(`[${new Date().toISOString()}] Usuario uniéndose al chat: ${username}, socketId: ${socket.id}, isFirstVisit: ${isFirstVisit}`);
         
+        // Validar la longitud del nombre de usuario
+        if (!username || username.length > 15) {
+            console.log(`Nombre de usuario inválido: "${username}" - demasiado largo o vacío`);
+            socket.emit('joinError', {
+                message: 'El nombre de usuario debe tener entre 3 y 15 caracteres'
+            });
+            return;
+        }
+        
         // Remover timestamps del nombre de usuario si es una reconexión
         let cleanUsername = username;
         if (username && username.includes('_')) {

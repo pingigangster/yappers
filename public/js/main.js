@@ -28,10 +28,8 @@ if (username && username.includes('_')) {
         console.log(`Detectado nombre con timestamp: ${username}, usando nombre original: ${originalUsername}`);
         username = originalUsername;
         
-        // Actualizar la URL sin recargar la página (para futuras reconexiones)
-        const url = new URL(window.location.href);
-        url.searchParams.set('username', username);
-        window.history.replaceState({}, '', url);
+        // Actualizar el nombre en localStorage pero no en la URL
+        localStorage.setItem('chatUsername', username);
     }
 }
 
@@ -272,6 +270,15 @@ socket.on('forceDisconnect', (data) => {
     console.log('Desconexión forzada recibida:', data);
     // Mostrar alerta antes de redireccionar
     alert(data.message || 'Tu cuenta ha sido eliminada por el administrador');
+    // Redireccionar a la página de inicio
+    window.location.href = 'index.html';
+});
+
+// Escuchar por errores de inicio de sesión
+socket.on('joinError', (data) => {
+    console.log('Error al unirse al chat:', data);
+    // Mostrar alerta antes de redireccionar
+    alert(data.message || 'Error al unirse al chat. Por favor, inténtalo de nuevo.');
     // Redireccionar a la página de inicio
     window.location.href = 'index.html';
 });

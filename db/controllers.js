@@ -34,6 +34,11 @@ const userController = {
         try {
             console.log(`Intentando conectar usuario: ${username} con socketId: ${socketId}`);
             
+            // Validar longitud del nombre de usuario
+            if (!username || username.length > 15) {
+                throw new Error('El nombre de usuario debe tener entre 3 y 15 caracteres');
+            }
+            
             // Verificar si el nombre ya contiene un timestamp (de reconexión anterior)
             const hasTimestamp = username.includes('_') && !isNaN(username.split('_').pop());
             
