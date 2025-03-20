@@ -239,6 +239,27 @@ body {
     box-shadow: 0 5px 15px rgba(52, 152, 219, 0.2);
 }
 
+.btn-warning {
+    background: linear-gradient(to right, #f39c12, #d35400);
+    color: var(--admin-white);
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-warning:hover {
+    background: linear-gradient(to right, #d35400, #f39c12);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(243, 156, 18, 0.2);
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -314,8 +335,28 @@ tr:hover td {
 }
 
 .small-btn:hover {
-    color: var(--admin-secondary);
-    background: rgba(231, 76, 60, 0.1);
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.user-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin-left: 6px;
+    font-size: 10px;
+}
+
+.user-badge.anonymous {
+    background-color: #f39c12;
+    color: white;
+}
+
+.user-badge.registered {
+    background-color: #2ecc71;
+    color: white;
 }
 
 .alert {

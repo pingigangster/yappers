@@ -79,6 +79,16 @@
                             Borrar Todos los Mensajes
                         </button>
                     </div>
+                    
+                    <!-- Tarjeta para borrar todos los datos -->
+                    <div class="admin-card">
+                        <h3>Reinicio Completo</h3>
+                        <p>¡Precaución! Esta acción borrará todos los usuarios y mensajes del sistema. La aplicación volverá a su estado inicial.</p>
+                        <button id="reset-everything" class="btn-danger" style="background: linear-gradient(to right, #e74c3c, #c0392b);">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            Reinicio Completo del Sistema
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Barra lateral (derecha) - Lista de usuarios -->
@@ -91,9 +101,13 @@
                             </button>
                         </h3>
                         <p>Administra los usuarios del chat. Puedes eliminar usuarios individualmente o todos a la vez.</p>
-                        <button id="delete-all-users" class="btn-danger" style="margin-bottom: 20px; width: 100%;">
+                        <button id="delete-all-users" class="btn-danger" style="margin-bottom: 10px; width: 100%;">
                             <i class="fas fa-trash-alt"></i> 
                             Borrar Todos los Usuarios
+                        </button>
+                        <button id="delete-anonymous-users" class="btn-warning" style="margin-bottom: 20px; width: 100%;">
+                            <i class="fas fa-user-slash"></i> 
+                            Borrar Solo Usuarios Anónimos
                         </button>
                         <div id="users-loading" class="loading">
                             <i class="fas fa-spinner"></i>
@@ -103,10 +117,11 @@
                             <table id="users-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 15%;">ID</th>
-                                        <th style="width: 20%;">Usuario</th>
+                                        <th style="width: 10%;">ID</th>
+                                        <th style="width: 15%;">UUID</th>
+                                        <th style="width: 15%;">Usuario</th>
                                         <th style="width: 15%;">Estado</th>
-                                        <th style="width: 40%;">Última Actividad</th>
+                                        <th style="width: 35%;">Última Actividad</th>
                                         <th style="width: 10%;">Acciones</th>
                                     </tr>
                                 </thead>
@@ -285,9 +300,16 @@
                             // Acortar el ID para mejor visualización
                             const shortId = user._id.substring(user._id.length - 8);
                             
+                            // Determinar si es un usuario anónimo o registrado
+                            const isAnonymous = !user.emailVerified;
+                            const userType = isAnonymous ? 
+                                '<span class="user-badge anonymous" title="Usuario anónimo"><i class="fas fa-user-alt"></i></span>' : 
+                                '<span class="user-badge registered" title="Usuario registrado"><i class="fas fa-user-check"></i></span>';
+                            
                             tr.innerHTML = `
                                 <td title="${user._id}">${shortId}...</td>
-                                <td>${user.username}</td>
+                                <td title="${user.uuid || 'N/A'}">${user.uuid ? user.uuid.substring(0, 8) + '...' : 'N/A'}</td>
+                                <td>${user.username} ${userType}</td>
                                 <td>
                                     <span style="color: ${isConnected ? '#2ecc71' : '#e74c3c'}">
                                         ${isConnected ? 'Conectado' : 'Desconectado'}
@@ -461,11 +483,137 @@
             confirmationModal.style.display = 'none';
         }
         
+        // Obtener referencia al botón de borrar usuarios anónimos
+        const deleteAnonymousUsersBtn = document.getElementById('delete-anonymous-users');
+        
+        // Mostrar confirmación para borrar usuarios anónimos
+        deleteAnonymousUsersBtn.addEventListener('click', () => {
+            modalTitle.textContent = 'Borrar Usuarios Anónimos';
+            modalBody.textContent = '¿Estás seguro de que deseas borrar TODOS los usuarios anónimos del chat? Esto eliminará los usuarios invitados que no están registrados.';
+            
+            // Configurar botones
+            modalConfirm.onclick = deleteAnonymousUsers;
+            modalCancel.onclick = closeModal;
+            
+            // Mostrar modal
+            confirmationModal.style.display = 'flex';
+        });
+        
+        // Borrar usuarios anónimos
+        async function deleteAnonymousUsers() {
+            closeModal();
+            
+            try {
+                console.log('Enviando solicitud para eliminar usuarios anónimos...');
+                const response = await fetch('/api/admin/users/delete-anonymous', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                console.log('Respuesta recibida');
+                const data = await response.json();
+                console.log('Datos de respuesta:', data);
+                
+                if (data.success) {
+                    showAlert(dashboardAlert, `${data.message}`, 'success');
+                    loadUsers(); // Actualizar la lista de usuarios
+                    loadStats(); // Actualizar estadísticas
+                } else {
+                    showAlert(dashboardAlert, 'Error al eliminar usuarios anónimos: ' + data.message, 'danger');
+                }
+            } catch (error) {
+                console.error('Error en la petición:', error);
+                showAlert(dashboardAlert, 'Error al eliminar usuarios anónimos: ' + error.message, 'danger');
+            }
+        }
+        
         // Actualizar estadísticas
         refreshStatsBtn.addEventListener('click', loadStats);
         
         // Actualizar usuarios
         refreshUsersBtn.addEventListener('click', loadUsers);
+        
+        // Obtener referencia al botón de reinicio completo
+        const resetEverythingBtn = document.getElementById('reset-everything');
+        
+        // Mostrar confirmación para reinicio completo
+        resetEverythingBtn.addEventListener('click', () => {
+            modalTitle.textContent = 'REINICIO COMPLETO';
+            modalBody.innerHTML = `
+                <p style="color: #e74c3c; font-weight: bold; margin-bottom: 15px;">
+                    ¡ADVERTENCIA! Esta es una acción IRREVERSIBLE.
+                </p>
+                <p>
+                    Estás a punto de eliminar permanentemente:
+                </p>
+                <ul style="margin: 10px 0 15px 20px; text-align: left;">
+                    <li>Todos los mensajes del chat</li>
+                    <li>Todos los usuarios (anónimos y registrados)</li>
+                </ul>
+                <p>
+                    Los usuarios conectados serán desconectados y redirigidos a la página de inicio.
+                </p>
+                <p style="font-weight: bold; margin-top: 15px;">
+                    ¿Estás COMPLETAMENTE seguro de que deseas continuar?
+                </p>
+            `;
+            
+            // Configurar botones
+            modalConfirm.onclick = resetEverything;
+            modalCancel.onclick = closeModal;
+            
+            // Mostrar modal
+            confirmationModal.style.display = 'flex';
+        });
+        
+        // Reinicio completo: borrar todos los usuarios y mensajes
+        async function resetEverything() {
+            closeModal();
+            
+            try {
+                // Primero borramos todos los mensajes
+                const messagesResponse = await fetch('/api/admin/messages/delete-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                const messagesData = await messagesResponse.json();
+                
+                // Luego borramos todos los usuarios
+                const usersResponse = await fetch('/api/admin/users/delete-all-including-connected', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                const usersData = await usersResponse.json();
+                
+                // Mostrar resultados combinados
+                if (messagesData.success && usersData.success) {
+                    showAlert(
+                        dashboardAlert, 
+                        `Reinicio completo exitoso: ${messagesData.message} y ${usersData.message}`, 
+                        'success'
+                    );
+                } else {
+                    let errorMessage = '';
+                    if (!messagesData.success) errorMessage += messagesData.message + ' ';
+                    if (!usersData.success) errorMessage += usersData.message;
+                    
+                    showAlert(dashboardAlert, `Error en el reinicio: ${errorMessage}`, 'danger');
+                }
+                
+                // Actualizar estadísticas y usuarios
+                loadStats();
+                loadUsers();
+                
+            } catch (error) {
+                console.error('Error en el reinicio completo:', error);
+                showAlert(dashboardAlert, 'Error en el reinicio completo: ' + error.message, 'danger');
+            }
+        }
         
         // Cerrar modal al hacer clic fuera
         window.addEventListener('click', (e) => {

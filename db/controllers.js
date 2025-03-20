@@ -2,6 +2,13 @@ const User = require('./models/User');
 const Message = require('./models/Message');
 const mongoose = require('mongoose');
 const Grid = require('gridfs-stream');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
+
+// Configuración de JWT
+const JWT_SECRET = 'chat_app_secret_key_2023'; // Idealmente esto debería estar en variables de entorno
+const JWT_EXPIRES_IN = '7d'; // Token válido por 7 días
 
 // Configurar GridFS
 let gfs;
@@ -27,92 +34,305 @@ const formatTime = () => {
 // Sistema de archivos temporal para almacenar chunks
 const tempChunksStorage = new Map();
 
+// Controladores para autenticación
+const authController = {
+    // Registrar un nuevo usuario
+    async register(userData) {
+        try {
+            const { username, email, password } = userData;
+            
+            // Verificar si el email ya existe
+            const emailExists = await User.findOne({ email: email.toLowerCase() });
+            if (emailExists) {
+                throw new Error('Este email ya está registrado');
+            }
+            
+            // Verificar si el usuario ya existe
+            const usernameExists = await User.findOne({ username });
+            if (usernameExists) {
+                throw new Error('Este nombre de usuario ya está en uso');
+            }
+            
+            // Crear token de verificación
+            const verificationToken = crypto.randomBytes(20).toString('hex');
+            
+            // Crear nuevo usuario
+            const user = new User({
+                username,
+                email: email.toLowerCase(),
+                password,
+                verificationToken,
+                emailVerified: false, // Por defecto no está verificado
+                role: 'user'
+            });
+            
+            await user.save();
+            
+            // Crear token JWT para enviar al cliente
+            const token = jwt.sign(
+                { id: user._id, username: user.username, role: user.role },
+                JWT_SECRET,
+                { expiresIn: JWT_EXPIRES_IN }
+            );
+            
+            return {
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    emailVerified: user.emailVerified
+                },
+                token
+            };
+        } catch (error) {
+            console.error(`Error al registrar usuario: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Iniciar sesión
+    async login(email, password) {
+        try {
+            if (!email || !password) {
+                throw new Error('Email y contraseña son obligatorios');
+            }
+
+            // Buscar el usuario por email (case insensitive)
+            const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+            
+            if (!user) {
+                console.log(`Intento de login fallido: usuario con email ${email} no encontrado`);
+                throw new Error('Credenciales inválidas');
+            }
+            
+            // Verificar contraseña
+            const isMatch = await bcrypt.compare(password, user.password);
+            
+            if (!isMatch) {
+                console.log(`Intento de login fallido: contraseña incorrecta para ${email}`);
+                throw new Error('Credenciales inválidas');
+            }
+            
+            // Generar JWT
+            const payload = {
+                id: user._id,
+                email: user.email,
+                username: user.username
+            };
+            
+            const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+            
+            console.log(`Usuario ${user.username} (${user._id}) ha iniciado sesión correctamente`);
+            console.log(`Token JWT generado correctamente (formato: ${token.split('.').length} partes)`);
+            
+            return {
+                token,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    emailVerified: user.emailVerified
+                }
+            };
+        } catch (error) {
+            console.error(`Error al iniciar sesión: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Verificar email
+    async verifyEmail(token) {
+        try {
+            const user = await User.findOne({ verificationToken: token });
+            if (!user) {
+                throw new Error('Token de verificación inválido');
+            }
+            
+            user.emailVerified = true;
+            user.verificationToken = undefined;
+            await user.save();
+            
+            return {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                emailVerified: user.emailVerified
+            };
+        } catch (error) {
+            console.error(`Error al verificar email: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Solicitar restablecimiento de contraseña
+    async forgotPassword(email) {
+        try {
+            const user = await User.findOne({ email: email.toLowerCase() });
+            if (!user) {
+                throw new Error('No existe un usuario con este email');
+            }
+            
+            // Generar token de restablecimiento
+            const resetToken = crypto.randomBytes(20).toString('hex');
+            user.passwordResetToken = resetToken;
+            user.passwordResetExpires = Date.now() + 3600000; // 1 hora
+            await user.save();
+            
+            return resetToken;
+        } catch (error) {
+            console.error(`Error al solicitar restablecimiento de contraseña: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Restablecer contraseña
+    async resetPassword(token, newPassword) {
+        try {
+            const user = await User.findOne({
+                passwordResetToken: token,
+                passwordResetExpires: { $gt: Date.now() }
+            });
+            
+            if (!user) {
+                throw new Error('Token inválido o expirado');
+            }
+            
+            user.password = newPassword;
+            user.passwordResetToken = undefined;
+            user.passwordResetExpires = undefined;
+            await user.save();
+            
+            return {
+                message: 'Contraseña restablecida correctamente'
+            };
+        } catch (error) {
+            console.error(`Error al restablecer contraseña: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Verificar token JWT
+    async verifyToken(token) {
+        try {
+            if (!token) {
+                throw new Error('Token no proporcionado');
+            }
+            
+            console.log(`Verificando JWT, formato: ${token.split('.').length} partes`);
+            
+            // Intentar decodificar el token
+            let decoded;
+            try {
+                decoded = jwt.verify(token, JWT_SECRET);
+            } catch (jwtError) {
+                console.error(`Error JWT: ${jwtError.name} - ${jwtError.message}`);
+                throw jwtError;
+            }
+            
+            // Verificar que el token contiene un ID de usuario
+            if (!decoded || !decoded.id) {
+                console.error('Token sin ID de usuario:', decoded);
+                throw new Error('Token inválido: sin ID de usuario');
+            }
+            
+            // Buscar el usuario correspondiente
+            const user = await User.findById(decoded.id);
+            
+            if (!user) {
+                console.error(`Usuario no encontrado para ID: ${decoded.id}`);
+                throw new Error('Usuario no encontrado');
+            }
+            
+            console.log(`Verificación exitosa para usuario: ${user.username} (${user._id})`);
+            
+            return {
+                user: {
+                    _id: user._id,
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    emailVerified: user.emailVerified
+                }
+            };
+        } catch (error) {
+            console.error(`Error al verificar token: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Iniciar sesión con Google (generar token JWT)
+    async loginWithGoogle(user) {
+        try {
+            if (!user || !user._id) {
+                throw new Error('Datos de usuario de Google inválidos');
+            }
+            
+            console.log(`Generando token JWT para usuario de Google: ${user.username}`);
+            
+            // Generar JWT
+            const payload = {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                googleId: user.googleId,
+                role: user.role
+            };
+            
+            const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+            
+            console.log(`Login exitoso para usuario de Google ${user.username} (${user._id})`);
+            
+            return {
+                token,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    emailVerified: user.emailVerified,
+                    image: user.image
+                }
+            };
+        } catch (error) {
+            console.error(`Error al iniciar sesión con Google: ${error}`);
+            throw error;
+        }
+    }
+};
+
 // Controladores para usuarios
 const userController = {
-    // Crear o actualizar usuario cuando se conecta
-    async connectUser(username, socketId) {
+    // Crear o actualizar usuario en la base de datos
+    async createOrUpdateUser(userData) {
         try {
-            console.log(`Intentando conectar usuario: ${username} con socketId: ${socketId}`);
-            
-            // Validar longitud del nombre de usuario
-            if (!username || username.length > 15) {
-                throw new Error('El nombre de usuario debe tener entre 3 y 15 caracteres');
+            // Esta función solo debe usarse para usuarios registrados
+            if (!userData._id) {
+                throw new Error('Se requiere ID de usuario para la conexión');
             }
             
-            // Verificar si el nombre ya contiene un timestamp (de reconexión anterior)
-            const hasTimestamp = username.includes('_') && !isNaN(username.split('_').pop());
+            // Actualizar usuario existente
+            const user = await User.findByIdAndUpdate(
+                userData._id,
+                {
+                    socketId: userData.socketId,
+                    isActive: userData.isActive || true,
+                    lastActive: new Date(),
+                    ...userData
+                },
+                { new: true, upsert: false }
+            );
             
-            // Si tiene timestamp, extraer el nombre original
-            const originalUsername = hasTimestamp ? username.split('_').slice(0, -1).join('_') : username;
-            
-            // Primero, buscar si existe un usuario con este socketId
-            let user = await User.findOne({ socketId });
-            
-            if (user) {
-                // Si existe, actualizar el nombre de usuario solo si no está reconectándose
-                console.log(`Usuario encontrado con socketId ${socketId}, actualizando...`);
-                if (!hasTimestamp) {
-                    user.username = username;
-                }
-                user.lastActive = new Date();
-                await user.save();
-                console.log(`Usuario actualizado: ${user.username}`);
-            } else {
-                // Buscar si hay un usuario con este nombre (reconexión)
-                let existingUser = await User.findOne({ 
-                    username: { $in: [username, originalUsername] }, 
-                    socketId: null 
-                });
-                
-                if (existingUser) {
-                    // Si el usuario existe pero está desconectado, solo actualizar el socketId
-                    console.log(`Usuario desconectado encontrado: ${existingUser.username}, reconectando...`);
-                    existingUser.socketId = socketId;
-                    existingUser.lastActive = new Date();
-                    await existingUser.save();
-                    user = existingUser;
-                    console.log(`Usuario reconectado: ${user.username}`);
-                } else {
-                    // Crear nuevo usuario
-                    console.log(`Creando nuevo usuario: ${username}`);
-                    user = new User({
-                        username,
-                        socketId,
-                        lastActive: new Date()
-                    });
-                    
-                    try {
-                        await user.save();
-                        console.log(`Nuevo usuario guardado: ${username} con ID: ${user._id}`);
-                    } catch (saveError) {
-                        console.error(`Error al guardar nuevo usuario: ${saveError}`);
-                        // Si hay un error específico, intenta manejarlo
-                        if (saveError.code === 11000) { // Error de clave duplicada
-                            console.log(`Intentando resolver conflicto de nombre de usuario duplicado: ${username}`);
-                            
-                            // Crear un nombre de usuario único añadiendo un timestamp
-                            const uniqueUsername = `${username}_${Date.now()}`;
-                            user.username = uniqueUsername;
-                            await user.save();
-                            console.log(`Usuario guardado con nombre alternativo: ${uniqueUsername}`);
-                        } else {
-                            throw saveError; // Re-lanzar cualquier otro error
-                        }
-                    }
-                }
+            if (!user) {
+                throw new Error('Usuario no encontrado');
             }
             
-            // Verificar que el usuario se haya guardado correctamente
-            const checkUser = await User.findOne({ socketId });
-            if (checkUser) {
-                console.log(`Verificación: Usuario encontrado con socketId ${socketId}: ${checkUser.username}`);
-            } else {
-                console.error(`ERROR: No se encontró usuario con socketId ${socketId} después de guardarlo`);
-            }
-            
+            console.log(`Usuario actualizado correctamente: ${userData.username}`);
             return user;
         } catch (error) {
-            console.error(`Error al conectar usuario: ${error}`);
+            console.error(`Error al crear/actualizar usuario: ${error}`);
             throw error;
         }
     },
@@ -121,8 +341,11 @@ const userController = {
     async getConnectedUsers() {
         try {
             console.log('Obteniendo usuarios conectados...');
-            // Buscar usuarios donde socketId no sea nulo
-            const users = await User.find({ socketId: { $ne: null } }).sort({ username: 1 });
+            // Buscar usuarios donde socketId no sea nulo y estén activos
+            const users = await User.find({ 
+                socketId: { $ne: null },
+                isActive: true
+            }).sort({ username: 1 });
             
             console.log(`Encontrados ${users.length} usuarios conectados.`);
             users.forEach((user, index) => {
@@ -188,6 +411,30 @@ const userController = {
         }
     },
     
+    // Obtener un usuario por su UUID
+    async getUserByUuid(uuid) {
+        try {
+            const user = await User.findOne({ uuid });
+            return user;
+        } catch (error) {
+            console.error(`Error al obtener usuario por UUID: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Buscar usuario por su Google ID
+    async findUserByGoogleId(googleId) {
+        try {
+            console.log(`Buscando usuario con googleId: ${googleId}`);
+            const user = await User.findOne({ googleId });
+            console.log(`Usuario encontrado: ${user ? user.username : 'No encontrado'}`);
+            return user;
+        } catch (error) {
+            console.error(`Error al buscar usuario por Google ID: ${error}`);
+            throw error;
+        }
+    },
+    
     // Eliminar un usuario por ID
     async deleteUser(userId) {
         try {
@@ -213,15 +460,79 @@ const userController = {
     },
     
     // Eliminar todos los usuarios, conectados y desconectados
-    async deleteAllUsers() {
+    async deleteAllUsers(req, res) {
         try {
             console.log('Borrando todos los usuarios (conectados y desconectados)...');
+            
+            // Obtener la lista de usuarios conectados antes de borrarlos
+            const connectedUsers = await User.find({ 
+                socketId: { $ne: null },
+                isActive: true
+            });
+            
+            // Almacenamos los socketIds de los usuarios conectados
+            const connectedSocketIds = connectedUsers.map(user => user.socketId);
+            
+            // Borrar todos los usuarios de la base de datos
             const result = await User.deleteMany({});
             console.log(`${result.deletedCount} usuarios eliminados en total.`);
-            return result;
+            
+            // Emitir evento de desconexión forzada a todos los usuarios conectados
+            connectedSocketIds.forEach(socketId => {
+                const socket = req.io.sockets.sockets.get(socketId);
+                if (socket) {
+                    socket.emit('forceDisconnect', {
+                        message: 'Tu cuenta ha sido eliminada por el administrador.'
+                    });
+                }
+            });
+            
+            res.status(200).json({ 
+                success: true, 
+                message: `${result.deletedCount} usuarios eliminados correctamente (incluyendo ${connectedSocketIds.length} conectados)` 
+            });
         } catch (error) {
             console.error(`Error al eliminar todos los usuarios: ${error}`);
-            throw error;
+            res.status(500).json({ success: false, message: 'Error al eliminar usuarios', error: error.message });
+        }
+    },
+    
+    // Eliminar usuarios anónimos (no verificados)
+    async deleteAnonymousUsers(req, res) {
+        try {
+            console.log('Borrando usuarios anónimos...');
+            
+            // Obtener la lista de usuarios anónimos conectados antes de borrarlos
+            const connectedAnonymousUsers = await User.find({ 
+                socketId: { $ne: null },
+                isActive: true,
+                emailVerified: false
+            });
+            
+            // Almacenamos los socketIds de los usuarios anónimos conectados
+            const connectedSocketIds = connectedAnonymousUsers.map(user => user.socketId);
+            
+            // Borrar todos los usuarios anónimos
+            const result = await User.deleteMany({ emailVerified: false });
+            console.log(`${result.deletedCount} usuarios anónimos eliminados.`);
+            
+            // Emitir evento de desconexión forzada a los usuarios anónimos conectados
+            connectedSocketIds.forEach(socketId => {
+                const socket = req.io.sockets.sockets.get(socketId);
+                if (socket) {
+                    socket.emit('forceDisconnect', {
+                        message: 'Tu cuenta ha sido eliminada por el administrador.'
+                    });
+                }
+            });
+            
+            res.status(200).json({ 
+                success: true, 
+                message: `${result.deletedCount} usuarios anónimos eliminados correctamente (incluyendo ${connectedSocketIds.length} conectados)` 
+            });
+        } catch (error) {
+            console.error(`Error al eliminar usuarios anónimos: ${error}`);
+            res.status(500).json({ success: false, message: 'Error al eliminar usuarios anónimos', error: error.message });
         }
     },
     
@@ -233,7 +544,61 @@ const userController = {
             console.error(`Error al contar usuarios: ${error}`);
             throw error;
         }
-    }
+    },
+    
+    // Crear usuario autenticado con Google
+    async createGoogleUser(userData) {
+        try {
+            console.log('Creando nuevo usuario de Google:', userData.username);
+            
+            // Verificar si el email ya existe
+            if (userData.email) {
+                const emailExists = await User.findOne({ email: userData.email.toLowerCase() });
+                if (emailExists) {
+                    // Si el usuario existe pero no tiene googleId, actualizar
+                    if (!emailExists.googleId) {
+                        console.log(`Usuario existente ${emailExists.username} actualizado con Google ID`);
+                        emailExists.googleId = userData.googleId;
+                        emailExists.emailVerified = true;
+                        if (userData.image) emailExists.image = userData.image;
+                        await emailExists.save();
+                        return emailExists;
+                    }
+                    return emailExists;
+                }
+            }
+            
+            // Verificar si el nombre de usuario ya existe
+            let username = userData.username;
+            let counter = 1;
+            let usernameExists = await User.findOne({ username });
+            
+            // Si el nombre de usuario existe, añadir un número al final
+            while (usernameExists) {
+                username = `${userData.username}${counter}`;
+                counter++;
+                usernameExists = await User.findOne({ username });
+            }
+            
+            // Crear nuevo usuario
+            const newUser = new User({
+                username,
+                email: userData.email ? userData.email.toLowerCase() : null,
+                password: userData.password, // Ya debe venir encriptada o ser aleatoria
+                googleId: userData.googleId,
+                image: userData.image,
+                emailVerified: true,
+                role: 'user'
+            });
+            
+            await newUser.save();
+            console.log(`Nuevo usuario de Google creado: ${newUser.username}`);
+            return newUser;
+        } catch (error) {
+            console.error(`Error al crear usuario de Google: ${error}`);
+            throw error;
+        }
+    },
 };
 
 // Controladores para mensajes
@@ -373,31 +738,44 @@ const messageController = {
     // Obtener mensajes recientes
     async getRecentMessages(limit = 50) {
         try {
-            console.log(`Obteniendo los últimos ${limit} mensajes...`);
+            console.log(`Obteniendo ${limit} mensajes recientes...`);
             
-            // Intentar obtener mensajes
-            const messages = await Message.find({})
-                .sort({ createdAt: -1 })
+            // Buscar mensajes ordenados por fecha (más recientes al final)
+            const messages = await Message.find()
+                .sort({ createdAt: 1 })
                 .limit(limit)
-                .lean()
-                .exec();
+                .lean();
             
-            console.log(`Recuperados ${messages.length} mensajes históricos.`);
+            console.log(`Mensajes encontrados: ${messages.length}`);
             
-            // Verificar si hay datos válidos en los mensajes
-            if (messages.length > 0) {
-                const sampleMessage = messages[0];
-                console.log(`Ejemplo de mensaje: ID=${sampleMessage._id}, Usuario=${sampleMessage.username}, Texto=${sampleMessage.text?.substring(0, 30) || '[sin texto]'}...`);
-            } else {
-                console.log('No hay mensajes previos en la base de datos.');
-            }
+            // Transformar cada mensaje para enviarlo al cliente
+            const transformedMessages = messages.map(msg => {
+                // Crear la URL para archivos multimedia si es necesario
+                let mediaUrl = msg.media;
+                if (msg.mediaId) {
+                    mediaUrl = `/api/files/${msg.mediaId}`;
+                }
+                
+                return {
+                    username: msg.username,
+                    userId: msg.userId,
+                    text: msg.text,
+                    time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    media: mediaUrl,
+                    fileType: msg.fileType,
+                    fileName: msg.fileName,
+                    fileSize: msg.fileSize,
+                    isLargeFile: !!msg.mediaId,
+                    createdAt: msg.createdAt
+                };
+            });
             
-            // Devolver mensajes en orden cronológico (del más antiguo al más reciente)
-            return messages.reverse();
+            console.log(`Mensajes transformados y listos para enviar: ${transformedMessages.length}`);
+            return transformedMessages;
+            
         } catch (error) {
-            console.error(`Error al obtener mensajes recientes: ${error}`);
-            // En caso de error, devolver un array vacío para evitar bloquear la interfaz
-            console.log('Devolviendo array vacío debido al error');
+            console.error('Error al obtener mensajes recientes:', error);
+            // En caso de error, devolver array vacío en lugar de propagar el error
             return [];
         }
     },
@@ -678,6 +1056,41 @@ const messageController = {
         } catch (error) {
             console.error(`Error al limpiar almacenamiento temporal: ${error}`);
         }
+    },
+    
+    // Obtener un mensaje específico por ID
+    async getMessageById(messageId) {
+        try {
+            const message = await Message.findById(messageId);
+            return message;
+        } catch (error) {
+            console.error(`Error al obtener mensaje por ID: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Obtener un mensaje por su UUID
+    async getMessageByUuid(uuid) {
+        try {
+            const message = await Message.findOne({ uuid });
+            return message;
+        } catch (error) {
+            console.error(`Error al obtener mensaje por UUID: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Obtener todos los mensajes (limitado a los más recientes)
+    async getAllMessages(limit = 100) {
+        try {
+            return await Message.find({})
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .lean();
+        } catch (error) {
+            console.error(`Error al obtener todos los mensajes: ${error}`);
+            throw error;
+        }
     }
 };
 
@@ -686,7 +1099,4 @@ setInterval(() => {
     messageController.cleanupTempStorage();
 }, 900000); // Ejecutar cada 15 minutos
 
-module.exports = {
-    userController,
-    messageController
-}; 
+module.exports = { userController, messageController, authController }; 

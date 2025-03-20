@@ -14,28 +14,12 @@ const MAX_FILE_SIZE = 200 * 1024 * 1024;
 // Límite de caracteres para mensajes de texto
 const MAX_MESSAGE_LENGTH = 200;
 
-// Procesar el nombre de usuario para remover timestamp si existe
-let username = window.username;
-// Verificar si el nombre tiene un timestamp (es una reconexión)
-if (username && username.includes('_')) {
-    const parts = username.split('_');
-    const lastPart = parts[parts.length - 1];
-    
-    // Si la última parte es un número (timestamp), usar solo el nombre original
-    if (!isNaN(lastPart) && lastPart.length > 5) {
-        const originalUsername = parts.slice(0, -1).join('_');
-        // Usar el nombre original sin el timestamp
-        console.log(`Detectado nombre con timestamp: ${username}, usando nombre original: ${originalUsername}`);
-        username = originalUsername;
-        
-        // Actualizar el nombre en localStorage pero no en la URL
-        localStorage.setItem('chatUsername', username);
-    }
-}
+// Obtener el nombre de usuario de la variable global
+let localUsername = window.username;
 
 // Mostrar el nombre de usuario en la interfaz
 if (usernameDisplay) {
-    usernameDisplay.innerText = username;
+    usernameDisplay.innerText = localUsername;
 }
 
 // Inicializar contador de caracteres
@@ -77,14 +61,19 @@ const setupCharacterCounter = () => {
     }
 };
 
-// Conectar al Socket.io
-const socket = io();
+// Conectar al Socket.io con opciones
+const socket = io({
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 10000
+});
 
 // Variables para el control de la carga
 let messagesLoaded = false;
 let usersLoaded = false;
 let connectionEstablished = false;
 let loadingTimeout = null;
+let connectionTimeout = null;
 
 // Avanzar en el progreso de carga
 function updateLoadingProgress(percent, message) {
@@ -132,7 +121,7 @@ function checkAllLoaded() {
 // Función para forzar la carga completa después de un tiempo máximo
 function setupLoadingTimeout() {
     console.log('Configurando timeout de carga...');
-    // Establecer un tiempo máximo de espera para la carga (5 segundos)
+    // Establecer un tiempo máximo de espera para la carga (10 segundos)
     loadingTimeout = setTimeout(() => {
         console.log('Tiempo máximo de carga alcanzado, mostrando interfaz...');
         console.log('Estado de carga - Mensajes cargados:', messagesLoaded, 'Usuarios cargados:', usersLoaded);
@@ -148,7 +137,7 @@ function setupLoadingTimeout() {
             
             // Intentar mostrar al menos el usuario actual
             const defaultUserList = [{
-                username: username,
+                username: localUsername,
                 id: socket.id
             }];
             displayUsers(defaultUserList);
@@ -156,7 +145,7 @@ function setupLoadingTimeout() {
         
         // Mostrar la interfaz
         updateLoadingProgress(100, 'Tiempo de espera excedido, continuando...');
-    }, 5000); // Reducir a 5 segundos
+    }, 10000); // 10 segundos
 }
 
 // Control de sesión para mensajes de bienvenida
@@ -164,11 +153,11 @@ let isFirstVisit = false;
 if (!localStorage.getItem('hasVisitedBefore')) {
     // Primera visita, guardar en localStorage
     localStorage.setItem('hasVisitedBefore', 'true');
-    localStorage.setItem('username', username);
+    localStorage.setItem('username', localUsername);
     isFirstVisit = true;
-} else if (localStorage.getItem('username') !== username) {
+} else if (localStorage.getItem('username') !== localUsername) {
     // Si el usuario cambió de nombre, considerarlo como nueva visita
-    localStorage.setItem('username', username);
+    localStorage.setItem('username', localUsername);
     isFirstVisit = true;
 }
 
@@ -178,60 +167,101 @@ updateLoadingProgress(20, 'Conectando al servidor...');
 // Configurar el timeout de carga
 setupLoadingTimeout();
 
-// Evento de confirmación de conexión exitosa
+// Configurar un timeout para la conexión inicial
+connectionTimeout = setTimeout(() => {
+    console.error('No se pudo establecer conexión con el servidor en el tiempo esperado');
+    updateLoadingProgress(100, 'Error de conexión, intentando continuar...');
+}, 15000); // 15 segundos max para conectar
+
+// Evento cuando se establece la conexión (nuevo)
+socket.on('connectionEstablished', (data) => {
+    console.log('Conexión inicial establecida:', data);
+    if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+        connectionTimeout = null;
+    }
+    updateLoadingProgress(25, 'Conexión establecida, esperando datos...');
+});
+
+// Evento de confirmación de conexión exitosa completa
 socket.on('connectionSuccess', (data) => {
     console.log('Conexión establecida correctamente:', data);
     connectionEstablished = true;
     updateLoadingProgress(35, 'Conexión establecida, cargando datos...');
     
-    // Si no recibimos datos en 5 segundos después de la conexión,
-    // asumimos que hay algún problema con la base de datos
-    setTimeout(() => {
-        if (!messagesLoaded || !usersLoaded) {
-            console.warn('La conexión se estableció pero los datos no han llegado en 5 segundos');
+    // Actualizar el nombre de usuario si es diferente
+    if (data.username !== localUsername) {
+        localUsername = data.username;
+        usernameDisplay.innerText = localUsername;
+    }
+    
+    // Mostrar imagen de perfil si está disponible
+    if (data.userImage) {
+        const userProfileIcon = document.querySelector('.user-profile i');
+        if (userProfileIcon) {
+            // Reemplazar el icono con la imagen de perfil
+            const profileContainer = userProfileIcon.parentElement;
+            userProfileIcon.remove();
             
-            // Forzar la carga
-            if (!messagesLoaded) {
-                messagesLoaded = true;
-                console.log('Forzando carga de mensajes');
-            }
+            const profileImg = document.createElement('img');
+            profileImg.src = data.userImage;
+            profileImg.alt = 'Perfil';
+            profileImg.className = 'profile-image';
+            profileImg.style.width = '40px';
+            profileImg.style.height = '40px';
+            profileImg.style.borderRadius = '50%';
+            profileImg.style.marginRight = '10px';
             
-            if (!usersLoaded) {
-                usersLoaded = true;
-                displayUsers([{
-                    username: username,
-                    id: socket.id
-                }]);
-                console.log('Forzando carga de usuarios');
-            }
-            
-            // Completar la carga
-            updateLoadingProgress(100, 'Carga forzada por timeout de datos');
+            profileContainer.prepend(profileImg);
         }
-    }, 5000);
+    }
+    
+    // Mostrar indicador si es un usuario autenticado
+    if (data.isAuthenticated) {
+        if (usernameDisplay) {
+            // Añadir un icono de verificación junto al nombre
+            usernameDisplay.innerHTML += ' <i class="fas fa-check-circle" style="color: #2ecc71; font-size: 14px;" title="Usuario verificado"></i>';
+        }
+    }
 });
 
 // Unirse al chat (ahora con una secuencia específica y más logs)
 setTimeout(() => {
     console.log('Enviando evento joinChat al servidor...');
     updateLoadingProgress(30, 'Solicitando datos del chat...');
-    socket.emit('joinChat', { 
-        username: username, 
-        isFirstVisit: isFirstVisit 
-    });
     
-    // Añadir un timeout adicional de seguridad solo para este evento
-    setTimeout(() => {
-        if (!connectionEstablished) {
-            console.warn('No se ha recibido confirmación de conexión después de 3 segundos');
+    // Obtener token usando la función centralizada
+    const tokenToSend = checkAuthToken();
+    
+    // Verificar el formato del token - debe ser una cadena JWT válida
+    // Un JWT tiene la estructura: xxxx.yyyy.zzzz (tres partes separadas por puntos)
+    if (tokenToSend) {
+        const tokenParts = tokenToSend.split('.');
+        if (tokenParts.length !== 3) {
+            console.error('Error: El token no tiene un formato JWT válido (debe tener 3 partes)');
+            alert('Error: El token de sesión no tiene un formato válido. Por favor, inicie sesión nuevamente.');
+            window.location.href = 'login.html';
+            return;
+        } else {
+            console.log('Token con formato JWT válido encontrado');
         }
         
-        if (!messagesLoaded || !usersLoaded) {
-            console.warn('No se ha recibido respuesta completa de joinChat después de 3 segundos');
-            console.log('Estado actual - Conexión:', connectionEstablished, 'Mensajes:', messagesLoaded, 'Usuarios:', usersLoaded);
-        }
-    }, 3000);
-}, 500); // Pequeño retraso para mostrar la animación
+        console.log('Intentando conectar con token JWT válido');
+        
+        // Enviar evento con token validado
+        socket.emit('joinChat', { 
+            token: tokenToSend,
+            isFirstVisit: isFirstVisit
+        });
+        
+        console.log('Evento joinChat enviado con token');
+    } else {
+        console.error('Error: No se encontró un token JWT válido para la autenticación');
+        alert('No se encontró un token válido o el formato es incorrecto. Por favor, inicie sesión nuevamente.');
+        window.location.href = 'login.html';
+        return;
+    }
+}, 1000); // Pequeño retraso para mostrar la animación
 
 // Obtener usuarios
 socket.on('usersList', (users) => {
@@ -247,7 +277,7 @@ socket.on('usersList', (users) => {
         console.error('Datos de usuarios inválidos:', users);
         // Crear una lista predeterminada solo con el usuario actual
         const defaultUserList = [{
-            username: username,
+            username: localUsername,
             id: socket.id
         }];
         displayUsers(defaultUserList);
@@ -256,13 +286,51 @@ socket.on('usersList', (users) => {
     }
 });
 
-// Agregar un evento para reconexiones por si se pierde la conexión
+// Comprobar el token cada vez que se recarga la página
+function checkAuthToken() {
+    // Comprobar si hay un token en la URL (viene de autenticación con Google)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    
+    if (urlToken) {
+        console.log('Token nuevo encontrado en la URL');
+        localStorage.setItem('token', urlToken);
+        
+        // Actualizar la variable global
+        window.token = urlToken;
+        
+        // Limpiar la URL (opcional)
+        window.history.replaceState({}, document.title, '/chat.html');
+        
+        return urlToken;
+    }
+    
+    // Devolver el token existente
+    return window.token || localStorage.getItem('token');
+}
+
+// Añadir un evento para reconexiones por si se pierde la conexión
 socket.on('reconnect', () => {
     console.log('Reconectado al servidor, solicitando datos actualizados...');
-    socket.emit('joinChat', { 
-        username: username, 
-        isFirstVisit: false 
-    });
+    
+    // Comprobar si hay un nuevo token
+    const tokenToSend = checkAuthToken();
+    
+    if (tokenToSend) {
+        socket.emit('joinChat', { 
+            token: tokenToSend,
+            isFirstVisit: false 
+        });
+        console.log('Evento joinChat enviado para reconexión con token');
+    } else {
+        console.error('No se encontró token para la reconexión');
+        // Intentar reconectar con solo el nombre de usuario como último recurso
+        socket.emit('joinChat', { 
+            username: localUsername, 
+            isFirstVisit: false 
+        });
+        console.log('Evento joinChat enviado para reconexión sin token (solo username)');
+    }
 });
 
 // Escuchar por desconexión forzada (admin eliminó la cuenta)
@@ -318,7 +386,7 @@ socket.on('historicalMessages', messages => {
             
             // Para los mensajes históricos, comparamos el nombre de usuario en lugar del socket.id
             // para determinar si el mensaje fue enviado por el usuario actual
-            if (message.username === username) {
+            if (message.username === localUsername) {
                 // Si el mensaje es del usuario actual, forzamos el userId a ser el socket.id actual
                 // para que se aplique el estilo "self"
                 message.userId = socket.id;
@@ -576,7 +644,7 @@ function handleMediaUpload(file) {
         
         // Agregar el contenido del mensaje temporal
         tempDiv.innerHTML = `
-            <p class="meta">${username} <span>${moment().format('HH:mm')}</span></p>
+            <p class="meta">${localUsername} <span>${moment().format('HH:mm')}</span></p>
             <div class="content">
                 ${text ? `<p class="text-content">${text}</p>` : ''}
                 <div class="media-container">
@@ -1156,4 +1224,48 @@ function scrollToBottom() {
 }
 
 // Inicializar el contador de caracteres
-setupCharacterCounter(); 
+setupCharacterCounter();
+
+// Event listener para botón de cerrar sesión
+document.addEventListener('DOMContentLoaded', () => {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            console.log('Cerrando sesión...');
+            
+            // Si hay un token (usuario autenticado), cerrar sesión en el servidor
+            if (window.token) {
+                try {
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    console.log('Sesión cerrada en el servidor');
+                } catch (error) {
+                    console.error('Error al cerrar sesión en el servidor:', error);
+                }
+            }
+            
+            // Limpiar toda la información de sesión
+            console.log('Limpiando datos de sesión...');
+            
+            // Limpiar localStorage completamente
+            localStorage.removeItem('chatUsername');
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            
+            // Limpiar las variables globales de window
+            window.token = null;
+            window.username = null;
+            
+            console.log('Sesión cerrada, redirigiendo a la página de inicio');
+            
+            // Redirigir a la página de inicio sin parámetros en la URL
+            window.location.href = 'index.html';
+        });
+    }
+}); 

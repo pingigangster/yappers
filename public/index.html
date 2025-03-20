@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="css/style.css">
-    <title>Iniciar Sesión - Chat en Tiempo Real</title>
+    <title>Chat en Tiempo Real</title>
     <style>
-        .login-container {
-            max-width: 500px;
+        .welcome-container {
+            max-width: 600px;
             margin: 80px auto;
             padding: 30px;
             background-color: var(--dark-color);
@@ -18,38 +18,95 @@
             color: #fff;
         }
         
-        .login-container h1 {
-            margin-bottom: 20px;
-            color: var(--light-color);
-        }
-        
-        .login-container .logo {
-            font-size: 3rem;
+        .logo {
+            font-size: 4rem;
             margin-bottom: 20px;
             color: var(--primary-color);
         }
         
-        .login-form {
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
+        h1 {
+            margin-bottom: 20px;
+            color: var(--light-color);
         }
         
-        .login-form input {
+        .description {
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+        }
+        
+        .options-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .option-card {
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 25px 20px;
+            border-radius: 8px;
+            transition: all 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .option-card:hover {
+            transform: translateY(-5px);
+            background-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            border-color: var(--primary-color);
+        }
+        
+        .option-card i {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+        
+        .option-card h3 {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        
+        .option-card p {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        /* Sección de entrada como invitado */
+        .guest-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: none;
+        }
+        
+        .guest-form {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .guest-form input {
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 5px;
             border: none;
             font-size: 16px;
             outline: none;
-            transition: all 0.3s;
         }
         
-        .login-form input:focus {
+        .guest-form input:focus {
             box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb), 0.3);
         }
         
-        .login-form button {
+        .guest-form button {
             padding: 15px;
             background-color: var(--primary-color);
             color: #fff;
@@ -60,146 +117,59 @@
             transition: all 0.3s;
         }
         
-        .login-form button:hover {
-            background-color: var(--secondary-color);
+        .guest-form button:hover {
+            background-color: #5853c4;
+            transform: translateY(-2px);
         }
         
         .error-message {
-            color: #ff6b6b;
+            color: #e74c3c;
+            font-size: 14px;
             margin-top: -15px;
             margin-bottom: 15px;
-            font-size: 14px;
-            text-align: left;
             display: none;
         }
         
-        .welcome-text {
-            margin-bottom: 30px;
-            line-height: 1.6;
-            color: #ccc;
-            font-size: 1.1rem;
+        .back-button {
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            font-size: 14px;
         }
         
-        .features {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 30px;
-            text-align: center;
-        }
-        
-        .feature {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 30%;
-        }
-        
-        .feature i {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            color: var(--secondary-color);
-        }
-        
-        .feature p {
-            font-size: 0.9rem;
-            color: #ccc;
-        }
-        
-        @media (max-width: 700px) {
-            .login-container {
-                margin: 30px 15px;
-                padding: 20px;
-            }
-            
-            .features {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .feature {
-                width: 80%;
-                margin-bottom: 20px;
-            }
+        .back-button:hover {
+            color: var(--primary-color);
         }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <i class="fas fa-comment-dots logo"></i>
+    <div class="welcome-container">
+        <i class="fas fa-comments logo"></i>
         <h1>Chat en Tiempo Real</h1>
         
-        <div class="welcome-text">
-            Bienvenido a nuestra plataforma de chat. Ingresa tu nombre para comenzar a chatear con otros usuarios en tiempo real.
+        <div class="description">
+            Bienvenido a nuestra aplicación de chat en tiempo real. Comunícate de manera instantánea 
+            con amigos y colegas, comparte archivos multimedia y disfruta de una experiencia de chat fluida.
         </div>
         
-        <form class="login-form" id="login-form">
-            <input 
-                type="text" 
-                id="username" 
-                name="username" 
-                placeholder="Ingresa tu nombre de usuario" 
-                required 
-                minlength="3"
-                maxlength="15"
-                autocomplete="off"
-            >
-            <div class="error-message" id="username-error">
-                El nombre de usuario debe tener entre 3 y 15 caracteres
-            </div>
+        <div class="options-container">
+            <a href="login.html" class="option-card">
+                <i class="fas fa-sign-in-alt"></i>
+                <h3>Iniciar Sesión</h3>
+                <p>Accede a tu cuenta para recuperar tu historial y preferencias.</p>
+            </a>
             
-            <button type="submit">
-                <i class="fas fa-sign-in-alt"></i> Unirse al Chat
-            </button>
-        </form>
-        
-        <div class="features">
-            <div class="feature">
-                <i class="fas fa-users"></i>
-                <p>Chatea con múltiples usuarios en tiempo real</p>
-            </div>
-            <div class="feature">
-                <i class="fas fa-file-upload"></i>
-                <p>Comparte archivos, imágenes y videos</p>
-            </div>
-            <div class="feature">
-                <i class="fas fa-mobile-alt"></i>
-                <p>Funciona en todos los dispositivos</p>
-            </div>
+            <a href="register.html" class="option-card">
+                <i class="fas fa-user-plus"></i>
+                <h3>Crear Cuenta</h3>
+                <p>Regístrate para guardar tu historial y personalizar tu experiencia.</p>
+            </a>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const loginForm = document.getElementById('login-form');
-            const usernameInput = document.getElementById('username');
-            const usernameError = document.getElementById('username-error');
-            
-            // Validar el nombre de usuario
-            usernameInput.addEventListener('input', () => {
-                const username = usernameInput.value.trim();
-                
-                if (username.length < 3 || username.length > 15) {
-                    usernameError.style.display = 'block';
-                    usernameInput.setCustomValidity('El nombre debe tener entre 3 y 15 caracteres');
-                } else {
-                    usernameError.style.display = 'none';
-                    usernameInput.setCustomValidity('');
-                }
-            });
-            
-            // Manejar el envío del formulario
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                
-                const username = usernameInput.value.trim();
-                
-                if (username.length >= 3 && username.length <= 15) {
-                    // Redirigir a la página de chat con el nombre de usuario como parámetro
-                    window.location.href = `chat.html?username=${encodeURIComponent(username)}`;
-                } else {
-                    usernameError.style.display = 'block';
-                }
-            });
+            // Todo el código relacionado con el inicio de sesión como invitado se ha eliminado
         });
     </script>
 </body>
