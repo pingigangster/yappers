@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat en tiempo real</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Estilos para la pantalla de carga */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--dark-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: #fff;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: spin 2s linear infinite;
+        }
+        
+        .loading-progress {
+            width: 80%;
+            max-width: 300px;
+            height: 10px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background-color: var(--success-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .loading-text {
+            font-size: 1.2rem;
+            text-align: center;
+            padding: 0 20px;
+        }
+        
+        .loading-status {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 0.5rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Ocultar la interfaz de chat hasta que se complete la carga */
+        .chat-container {
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+        
+        .chat-container.loaded {
+            opacity: 1;
+        }
+        
+        /* Estilos para el selector de emojis */
+        .btn-emoji {
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            padding: 5px 12px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            margin: 0 5px;
+        }
+        
+        .btn-emoji i {
+            color: #fff;
+        }
+        
+        .btn-emoji:hover {
+            background-color: #4a47a3; /* Versión más oscura del color primario */
+        }
+        
+        .btn-emoji:hover i {
+            color: #fff;
+        }
+        
+        .emoji-picker {
+            position: absolute;
+            bottom: 70px;
+            left: auto;
+            right: auto; 
+            transform: translateX(-40%);
+            background-color: var(--dark-color);
+            border-radius: 5px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            display: none;
+            z-index: 100;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+        }
+        
+        .emoji-picker.active {
+            display: grid;
+        }
+        
+        .emoji-item {
+            font-size: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+        
+        .emoji-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+    <script>
+        // Inicializar variables globales de usuario
+        window.username = null;
+        window.token = null;
+        
+        // Verificar autenticación al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            // Comprobar si hay un token en la URL (viene de autenticación con Google)
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlToken = urlParams.get('token');
+            
+            if (urlToken) {
+                console.log('Token encontrado en la URL');
+                localStorage.setItem('token', urlToken);
+                
+                // Actualizar también la variable global
+                window.token = urlToken;
+                
+                // Limpiar la URL inmediatamente para proteger el token
+                window.history.replaceState({}, document.title, '/chat.html');
+            }
+            
+            // Obtener usuario desde localStorage
+            const storedUser = localStorage.getItem('user');
+            const storedToken = localStorage.getItem('token');
+            
+            // Verificar que exista token
+            if (!storedToken) {
+                console.error('No se encontró token de autenticación');
+                alert('Sesión no válida. Por favor, inicie sesión nuevamente.');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Si no hay datos de usuario pero tenemos un token (caso Google OAuth)
+            if (!storedUser) {
+                console.log('No se encontraron datos de usuario en localStorage, pero hay un token. Obteniendo datos del usuario...');
+                
+                // Configurar mensaje de carga
+                document.getElementById('loading-status').textContent = 'Obteniendo datos de usuario...';
+                
+                // Intentar obtener los datos de usuario del servidor
+                fetch('/api/auth/me', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${storedToken}`
+                    },
+                    credentials: 'include' // Incluir cookies
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error al obtener datos del usuario');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.user) {
+                        // Guardar usuario en localStorage
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        
+                        // Asignar a variables globales
+                        window.username = data.user.username;
+                        window.token = storedToken;
+                        
+                        console.log(`Inicialización exitosa para: ${window.username}`);
+                        
+                        // Variables de usuario establecidas correctamente
+                        document.getElementById('loading-status').textContent = 'Conectando al servidor...';
+                    } else {
+                        throw new Error('Datos de usuario inválidos');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al obtener datos del usuario:', error);
+                    alert('Error al obtener datos del usuario. Por favor, inicie sesión nuevamente.');
+                    window.location.href = 'login.html';
+                });
+                return;
+            }
+            
+            try {
+                // Parsear usuario desde localStorage
+                const user = JSON.parse(storedUser);
+                
+                // Verificar que el usuario tenga username
+                if (!user || !user.username) {
+                    throw new Error('Datos de usuario incompletos');
+                }
+                
+                // Asignar a variables globales
+                window.username = user.username;
+                window.token = storedToken;
+                
+                console.log(`Inicialización exitosa para: ${window.username}`);
+                
+                // Variables de usuario establecidas correctamente
+                document.getElementById('loading-status').textContent = 'Conectando al servidor...';
+            } catch (error) {
+                console.error('Error al procesar datos de usuario:', error);
+                alert('Error al procesar los datos de usuario. Por favor, inicie sesión nuevamente.');
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+</head>
+<body>
+    <!-- Pantalla de carga -->
+    <div id="loading-screen" class="loading-screen">
+        <i class="fas fa-sync loading-icon"></i>
+        <h2>Cargando mensajes</h2>
+        <div class="loading-progress">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <div class="loading-text">
+            Preparando tu conversación...
+            <div id="loading-status" class="loading-status">Conectando al servidor...</div>
+        </div>
+    </div>
+
+    <div id="chat-container" class="chat-container">
+        <header class="chat-header">
+            <h1>100% REAL Chat</h1>
+            <div class="user-info">
+                <span id="username-display"></span>
+                <a href="#" class="btn" id="logout-btn">Salir</a>
+            </div>
+        </header>
+        <main class="chat-main">
+            <div class="sidebar">
+                <h3>Usuarios Conectados</h3>
+                <ul id="users"></ul>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <!-- Zona para arrastrar y soltar archivos multimedia -->
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Suelta tu archivo aquí</p>
+                        <span class="drop-zone-hint">Cualquier tipo de archivo (imágenes, documentos, videos...)</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div class="chat-form-container">
+            <form id="chat-form">
+                <div class="input-wrapper" data-tooltip="Puedes pegar imágenes o GIFs (Ctrl+V)">
+                    <input
+                        id="msg"
+                        type="text"
+                        placeholder="Escribe un mensaje..."
+                        autocomplete="off"
+                    />
+                </div>
+                <button type="button" id="emoji-btn" class="btn-emoji" title="Insertar emoji">
+                    <i class="fas fa-smile"></i>
+                </button>
+                <div id="emoji-picker" class="emoji-picker">
+                    <!-- Emojis se cargarán aquí -->
+                </div>
+                <label for="media-upload" class="btn-image" title="Subir cualquier tipo de archivo">
+                    <i class="fas fa-file-upload"></i>
+                    <input 
+                        type="file" 
+                        id="media-upload" 
+                        name="media-upload"
+                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.txt,.rtf,application/*"
+                        style="position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0;"
+                        onchange="console.log('Cambio en input de archivo detectado')"
+                    >
+                </label>
+                <button type="submit" class="btn">Enviar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para ver archivos multimedia -->
+    <div id="img-modal" class="img-modal">
+        <span class="close-btn"><i class="fas fa-times"></i></span>
+        <div class="modal-content">
+            <!-- El contenido será insertado dinámicamente: imagen, GIF o video -->
+        </div>
+    </div>
+
+    <!-- Scripts necesarios -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.11.2/qs.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Variables globales para almacenar información del usuario
+        let username = null;
+        let token = null;
+        let userObj = null;
+        
+        // Obtener token y datos de usuario desde localStorage
+        const storedUser = localStorage.getItem('user');
+        const storedToken = localStorage.getItem('token');
+        
+        // Verificar si hay un usuario almacenado y es válido
+        if (storedUser && storedToken) {
+            try {
+                userObj = JSON.parse(storedUser);
+                token = storedToken;
+                
+                // Verificación adicional para asegurarse de que el objeto de usuario tenga la estructura correcta
+                if (!userObj || !userObj.username) {
+                    console.error('Datos de usuario incompletos o inválidos, redirigiendo a login');
+                    window.location.href = 'login.html';
+                } else {
+                    console.log('Usuario autenticado:', userObj.username);
+                    username = userObj.username;
+                    
+                    // Establecer nombre para usar en main.js
+                    window.username = username;
+                    window.token = token;
+                }
+            } catch (e) {
+                console.error('Error al parsear usuario almacenado:', e);
+                window.location.href = 'login.html';
+            }
+        } else {
+            // Si no hay usuario autenticado, redirigir a la página de login
+            console.log('No hay usuario autenticado, redirigiendo a página de login');
+            window.location.href = 'login.html';
+        }
+        
+        // Variables de la pantalla de carga
+        const loadingScreen = document.getElementById('loading-screen');
+        const progressBar = document.getElementById('progress-bar');
+        const loadingStatus = document.getElementById('loading-status');
+        const chatContainer = document.getElementById('chat-container');
+        
+        // Función para actualizar el progreso
+        window.updateLoadingProgress = function(percent, statusText) {
+            console.log(`Actualización de progreso: ${percent}% - ${statusText}`);
+            progressBar.style.width = `${percent}%`;
+            if (statusText) {
+                loadingStatus.textContent = statusText;
+            }
+            
+            // Si llega al 100%, después de un breve retraso, ocultar la pantalla de carga
+            if (percent >= 100) {
+                setTimeout(() => {
+                    console.log('Carga completada, mostrando interfaz...');
+                    loadingScreen.classList.add('hidden');
+                    chatContainer.classList.add('loaded');
+                }, 500);
+            }
+        };
+        
+        // Script de inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            // Validar que los elementos existan
+            console.log('Interfaz cargada. Verificando elementos...');
+            const fileInput = document.getElementById('media-upload');
+            if (fileInput) {
+                console.log('Input de archivo encontrado');
+                fileInput.addEventListener('click', () => {
+                    console.log('Click en input de archivo');
+                });
+            } else {
+                console.error('¡ERROR! Input de archivo no encontrado');
+            }
+            
+            // Iniciar con la pantalla de carga
+            window.updateLoadingProgress(10, 'Preparando conexión...');
+            
+            // Verificar que Socket.io esté disponible
+            window.socketCheck = function() {
+                console.log('Verificando disponibilidad de Socket.io...');
+                if (typeof io === 'undefined') {
+                    console.error('Socket.io no está cargado, reintentando en 1 segundo...');
+                    window.updateLoadingProgress(15, 'Error al conectar con el servidor, reintentando...');
+                    setTimeout(window.socketCheck, 1000);
+                } else {
+                    console.log('Socket.io disponible, inicialización continuará en main.js');
+                    window.updateLoadingProgress(20, 'Socket.io disponible, continuando...');
+                }
+            };
+            
+            // Iniciar verificación de socket
+            window.socketCheck();
+            
+            // Agregar un failsafe para evitar que se quede cargando indefinidamente
+            setTimeout(() => {
+                if (loadingScreen && !loadingScreen.classList.contains('hidden')) {
+                    console.error('Forzando mostrar chat después de 10 segundos por timeout');
+                    window.updateLoadingProgress(100, 'Error al cargar, continuando de todos modos...');
+                }
+            }, 10000);
+        });
+    </script>
+    <script src="js/main.js"></script>
+    <script>
+        // Inicializar selector de emojis
+        document.addEventListener('DOMContentLoaded', function() {
+            const emojiBtn = document.getElementById('emoji-btn');
+            const emojiPicker = document.getElementById('emoji-picker');
+            const msgInput = document.getElementById('msg');
+            
+            // Lista de emojis populares
+            const emojis = [
+                '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+                '🙂', '🙃', '😉', '😌', '😍', '😘', '😗', '😙', '😚', '😋',
+                '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '😏',
+                '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫',
+                '😩', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '😱',
+                '👍', '👎', '👏', '🙌', '👐', '🤲', '🤝', '👊', '✌️', '❤️',
+                '💯', '🔥', '⭐', '🎉', '🎊', '🎁', '👻', '💩', '🤡', '👽'
+            ];
+            
+            // Crear elementos de emojis
+            emojis.forEach(emoji => {
+                const span = document.createElement('span');
+                span.classList.add('emoji-item');
+                span.textContent = emoji;
+                
+                // Al hacer clic en un emoji, añadirlo al mensaje
+                span.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    msgInput.value += emoji;
+                    msgInput.focus();
+                    emojiPicker.classList.remove('active');
+                });
+                
+                emojiPicker.appendChild(span);
+            });
+            
+            // Asegurarnos de posicionar el desplegable encima del botón
+            function positionEmojiPicker() {
+                const btnRect = emojiBtn.getBoundingClientRect();
+                emojiPicker.style.bottom = (window.innerHeight - btnRect.top + 10) + 'px';
+                emojiPicker.style.left = (btnRect.left + (btnRect.width / 2)) + 'px';
+            }
+            
+            // Mostrar/ocultar selector de emojis al hacer clic en el botón
+            emojiBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                positionEmojiPicker();
+                emojiPicker.classList.toggle('active');
+            });
+            
+            // Cerrar el selector de emojis al hacer clic fuera de él
+            document.addEventListener('click', function(event) {
+                if (!emojiPicker.contains(event.target) && event.target !== emojiBtn) {
+                    emojiPicker.classList.remove('active');
+                }
+            });
+            
+            // Reposicionar cuando se redimensiona la ventana
+            window.addEventListener('resize', function() {
+                if (emojiPicker.classList.contains('active')) {
+                    positionEmojiPicker();
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

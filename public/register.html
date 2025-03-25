@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="css/style.css">
+    <title>Registro - Chat en Tiempo Real</title>
+    <style>
+        .auth-container {
+            max-width: 500px;
+            margin: 80px auto;
+            padding: 30px;
+            background-color: var(--dark-color);
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            color: #fff;
+        }
+        
+        .auth-container h1 {
+            margin-bottom: 20px;
+            color: var(--light-color);
+        }
+        
+        .auth-container .logo {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: var(--primary-color);
+        }
+        
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        
+        .auth-form input {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        
+        .auth-form input:focus {
+            box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb), 0.3);
+        }
+        
+        .auth-form button {
+            padding: 15px;
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .auth-form button:hover {
+            background-color: #5853c4;
+            transform: translateY(-2px);
+        }
+        
+        .switch-form {
+            margin-top: 20px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .switch-form a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        .switch-form a:hover {
+            text-decoration: underline;
+        }
+        
+        .error-message {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: -15px;
+            margin-bottom: 15px;
+            text-align: left;
+            padding-left: 5px;
+            display: none;
+        }
+        
+        .alert {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert-danger {
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+        
+        .alert-success {
+            background-color: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+        
+        /* Estilos para botón de Google */
+        .google-login-button {
+            background-color: #ffffff;
+            color: #444;
+            border: 1px solid #ddd;
+            padding: 12px 15px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px auto 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 16px;
+            width: 100%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .google-login-button:hover {
+            background-color: #f5f5f5;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .google-login-button img {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+        }
+        
+        .separator {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 20px 0;
+            color: rgba(255,255,255,0.7);
+        }
+        
+        .separator::before,
+        .separator::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .separator::before {
+            margin-right: 10px;
+        }
+        
+        .separator::after {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <i class="fas fa-user-plus logo"></i>
+        <h1>Crear Cuenta</h1>
+        
+        <div class="welcome-text">
+            Crea una nueva cuenta para guardar tu historial y personalizar tu experiencia.
+        </div>
+        
+        <div id="alert" class="alert"></div>
+        
+        <form class="auth-form" id="register-form">
+            <input 
+                type="text" 
+                id="username" 
+                name="username" 
+                placeholder="Nombre de usuario" 
+                required 
+                minlength="3"
+                maxlength="15"
+                autocomplete="username"
+            >
+            <div class="error-message" id="username-error">
+                El nombre de usuario debe tener entre 3 y 15 caracteres
+            </div>
+            
+            <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                placeholder="Correo electrónico" 
+                required 
+                autocomplete="email"
+            >
+            <div class="error-message" id="email-error">
+                Por favor introduce un correo electrónico válido
+            </div>
+            
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                placeholder="Contraseña" 
+                required 
+                minlength="6"
+                autocomplete="new-password"
+            >
+            <div class="error-message" id="password-error">
+                La contraseña debe tener al menos 6 caracteres
+            </div>
+            
+            <input 
+                type="password" 
+                id="confirm-password" 
+                name="confirm-password" 
+                placeholder="Confirmar contraseña" 
+                required 
+                autocomplete="new-password"
+            >
+            <div class="error-message" id="confirm-password-error">
+                Las contraseñas no coinciden
+            </div>
+            
+            <button type="submit">
+                <i class="fas fa-user-plus"></i> Registrarse
+            </button>
+        </form>
+        
+        <div class="separator">o</div>
+        
+        <a href="/api/auth/google" class="google-login-button">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google logo">
+            Registrarse con Google
+        </a>
+        
+        <div class="switch-form">
+            ¿Ya tienes una cuenta? <a href="login.html">Iniciar sesión</a>
+        </div>
+        
+        <div class="switch-form">
+            <a href="index.html">Continuar como invitado</a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const registerForm = document.getElementById('register-form');
+            const usernameInput = document.getElementById('username');
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const confirmPasswordInput = document.getElementById('confirm-password');
+            
+            const usernameError = document.getElementById('username-error');
+            const emailError = document.getElementById('email-error');
+            const passwordError = document.getElementById('password-error');
+            const confirmPasswordError = document.getElementById('confirm-password-error');
+            
+            const alert = document.getElementById('alert');
+            
+            // Mostrar mensaje de alerta
+            const showAlert = (message, type = 'danger') => {
+                alert.textContent = message;
+                alert.className = `alert alert-${type}`;
+                alert.style.display = 'block';
+                
+                // Ocultar después de 5 segundos
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            };
+            
+            // Validar nombre de usuario
+            usernameInput.addEventListener('input', () => {
+                const username = usernameInput.value.trim();
+                
+                if (username.length < 3 || username.length > 15) {
+                    usernameError.style.display = 'block';
+                    usernameInput.setCustomValidity('El nombre debe tener entre 3 y 15 caracteres');
+                } else {
+                    usernameError.style.display = 'none';
+                    usernameInput.setCustomValidity('');
+                }
+            });
+            
+            // Validar email
+            emailInput.addEventListener('input', () => {
+                const email = emailInput.value.trim();
+                const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+                
+                if (!emailRegex.test(email)) {
+                    emailError.style.display = 'block';
+                    emailInput.setCustomValidity('Por favor introduce un correo electrónico válido');
+                } else {
+                    emailError.style.display = 'none';
+                    emailInput.setCustomValidity('');
+                }
+            });
+            
+            // Validar contraseña
+            passwordInput.addEventListener('input', () => {
+                const password = passwordInput.value;
+                
+                if (password.length < 6) {
+                    passwordError.style.display = 'block';
+                    passwordInput.setCustomValidity('La contraseña debe tener al menos 6 caracteres');
+                } else {
+                    passwordError.style.display = 'none';
+                    passwordInput.setCustomValidity('');
+                }
+                
+                // Comprobar también la confirmación de contraseña
+                validatePasswordMatch();
+            });
+            
+            // Validar confirmación de contraseña
+            confirmPasswordInput.addEventListener('input', validatePasswordMatch);
+            
+            function validatePasswordMatch() {
+                const password = passwordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                
+                if (confirmPassword && password !== confirmPassword) {
+                    confirmPasswordError.style.display = 'block';
+                    confirmPasswordInput.setCustomValidity('Las contraseñas no coinciden');
+                } else {
+                    confirmPasswordError.style.display = 'none';
+                    confirmPasswordInput.setCustomValidity('');
+                }
+            }
+            
+            // Manejar el envío del formulario
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const username = usernameInput.value.trim();
+                const email = emailInput.value.trim();
+                const password = passwordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                
+                // Validación final
+                if (password !== confirmPassword) {
+                    showAlert('Las contraseñas no coinciden');
+                    return;
+                }
+                
+                try {
+                    // Enviar solicitud de registro
+                    const response = await fetch('/api/auth/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, email, password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Registro exitoso
+                        showAlert('¡Registro exitoso! Redirigiendo al chat...', 'success');
+                        
+                        // Almacenar usuario en localStorage para uso futuro
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        
+                        // Redirigir a chat después de 2 segundos
+                        setTimeout(() => {
+                            window.location.href = 'chat.html';
+                        }, 2000);
+                    } else {
+                        // Error en el registro
+                        showAlert(data.message || 'Error en el registro');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showAlert('Error de conexión. Inténtalo de nuevo más tarde.');
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
