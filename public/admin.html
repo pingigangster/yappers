@@ -18,10 +18,10 @@
             <section id="login-section" class="admin-login-section">
                 <h2>Acceso</h2>
                 <div id="login-alert"></div>
-                <form id="login-form">
+                <form id="admin-login-form">
                     <div class="input-group">
-                        <label for="password">Contraseña de Administrador</label>
-                        <input type="password" id="password" name="password" placeholder="Ingresa la contraseña..." required>
+                        <label for="admin-password">Contraseña de Administrador</label>
+                        <input type="password" id="admin-password" name="password" placeholder="Ingresa la contraseña..." required>
                     </div>
                     <button type="submit" class="btn-primary">Acceder</button>
                 </form>
@@ -29,7 +29,7 @@
             
             <!-- Dashboard de Administrador (se muestra después del login) -->
             <section id="admin-dashboard" class="admin-dashboard">
-                <div id="dashboard-alert"></div>
+                <div class="alert-container"></div>
                 
                 <!-- Contenido principal (izquierda) -->
                 <div class="admin-content">
@@ -74,7 +74,7 @@
                     <div class="admin-card">
                         <h3>Gestión de Mensajes</h3>
                         <p>Desde aquí puedes borrar todos los mensajes del chat. Esta acción no se puede deshacer.</p>
-                        <button id="delete-all-messages" class="btn-danger">
+                        <button id="delete-all-messages-btn" class="btn-danger">
                             <i class="fas fa-trash-alt"></i> 
                             Borrar Todos los Mensajes
                         </button>
@@ -84,7 +84,7 @@
                     <div class="admin-card">
                         <h3>Reinicio Completo</h3>
                         <p>¡Precaución! Esta acción borrará todos los usuarios y mensajes del sistema. La aplicación volverá a su estado inicial.</p>
-                        <button id="reset-everything" class="btn-danger" style="background: linear-gradient(to right, #e74c3c, #c0392b);">
+                        <button id="reset-everything-btn" class="btn-danger" style="background: linear-gradient(to right, #e74c3c, #c0392b);">
                             <i class="fas fa-exclamation-triangle"></i> 
                             Reinicio Completo del Sistema
                         </button>
@@ -95,40 +95,29 @@
                 <div class="admin-sidebar">
                     <div class="admin-card">
                         <h3>
-                            Gestión de Usuarios
-                            <button id="refresh-users" class="refresh-btn" title="Actualizar usuarios">
+                            Usuarios conectados
+                            <button class="refresh-btn" id="refresh-connections-btn" title="Actualizar usuarios conectados">
                                 <i class="fas fa-sync-alt"></i>
                             </button>
                         </h3>
-                        <p>Administra los usuarios del chat. Puedes eliminar usuarios individualmente o todos a la vez.</p>
-                        <button id="delete-all-users" class="btn-danger" style="margin-bottom: 10px; width: 100%;">
-                            <i class="fas fa-trash-alt"></i> 
-                            Borrar Todos los Usuarios
-                        </button>
-                        <button id="delete-anonymous-users" class="btn-warning" style="margin-bottom: 20px; width: 100%;">
-                            <i class="fas fa-user-slash"></i> 
-                            Borrar Solo Usuarios Anónimos
-                        </button>
-                        <div id="users-loading" class="loading">
-                            <i class="fas fa-spinner"></i>
-                            <p>Cargando usuarios...</p>
-                        </div>
-                        <div id="users-table-container" style="display: none;">
+                        <div id="users-table-container">
                             <table id="users-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 10%;">ID</th>
-                                        <th style="width: 15%;">UUID</th>
-                                        <th style="width: 15%;">Usuario</th>
-                                        <th style="width: 15%;">Estado</th>
-                                        <th style="width: 35%;">Última Actividad</th>
-                                        <th style="width: 10%;">Acciones</th>
+                                        <th>Correo</th>
+                                        <th>Nombre</th>
+                                        <th>Fecha de registro</th>
+                                        <th>Estado</th>
+                                        <th>Acción</th>
                                     </tr>
                                 </thead>
-                                <tbody id="users-table-body">
-                                    <!-- Los usuarios se cargarán aquí dinámicamente -->
+                                <tbody id="users-tbody">
+                                    <!-- Tabla de usuarios generada dinámicamente -->
                                 </tbody>
                             </table>
+                            <div id="empty-users-message" class="empty-message" style="display: none;">
+                                No hay usuarios registrados en el sistema
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -156,64 +145,121 @@
     <script>
         // Variables globales
         let adminPassword = '';
+        let connectedUsers = [];
+        const API_BASE_URL = window.location.origin;
         
         // Elementos DOM
         const loginSection = document.getElementById('login-section');
         const adminDashboard = document.getElementById('admin-dashboard');
-        const loginForm = document.getElementById('login-form');
+        const loginForm = document.getElementById('admin-login-form');
         const loginAlert = document.getElementById('login-alert');
-        const dashboardAlert = document.getElementById('dashboard-alert');
-        const deleteAllMessagesBtn = document.getElementById('delete-all-messages');
+        const alertContainer = document.querySelector('.alert-container');
+        const deleteAllMessagesBtn = document.getElementById('delete-all-messages-btn');
         const refreshStatsBtn = document.getElementById('refresh-stats');
-        const refreshUsersBtn = document.getElementById('refresh-users');
+        const refreshConnectionsBtn = document.getElementById('refresh-connections-btn');
         const statsLoading = document.getElementById('stats-loading');
         const statsContent = document.getElementById('stats-content');
-        const usersLoading = document.getElementById('users-loading');
-        const usersTableContainer = document.getElementById('users-table-container');
-        const usersTableBody = document.getElementById('users-table-body');
+        const usersTbody = document.getElementById('users-tbody');
+        const emptyUsersMessage = document.getElementById('empty-users-message');
         const confirmationModal = document.getElementById('confirmation-modal');
         const modalTitle = document.getElementById('modal-title');
         const modalBody = document.getElementById('modal-body');
         const modalCancel = document.getElementById('modal-cancel');
         const modalConfirm = document.getElementById('modal-confirm');
+        const resetEverythingBtn = document.getElementById('reset-everything-btn');
+        
+        // Indicador de si se está realizando una operación
+        let isLoading = false;
         
         // Formatear fecha
-        function formatDate(dateString) {
-            if (!dateString) return '-';
-            const date = new Date(dateString);
-            return date.toLocaleString('es-ES', { 
-                day: '2-digit', 
-                month: '2-digit', 
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
         }
         
         // Mostrar alerta
-        function showAlert(container, message, type = 'success') {
-            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+        function showAlert(message, type = 'success') {
+            const alertElement = document.createElement('div');
+            alertElement.className = `alert alert-${type}`;
+            alertElement.textContent = message;
+            alertContainer.appendChild(alertElement);
             
-            // Ocultar alerta después de 5 segundos
+            // Eliminar alerta después de 5 segundos
             setTimeout(() => {
-                container.innerHTML = '';
+                alertElement.style.opacity = '0';
+                setTimeout(() => alertElement.remove(), 300);
             }, 5000);
+        }
+        
+        // Manejar errores de fetch genéricos
+        async function safeFetch(url, options) {
+            try {
+                console.log(`Realizando petición a: ${url}`);
+                const response = await fetch(url, options);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Error en respuesta (${response.status}): ${errorText}`);
+                    throw new Error(`Error ${response.status}: ${errorText || response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log(`Respuesta exitosa:`, data);
+                return data;
+            } catch (error) {
+                console.error(`Error en fetch a ${url}:`, error);
+                throw error;
+            }
+        }
+        
+        // Control de estados de carga
+        function setLoading(elementOrState, isLoadingState = null) {
+            // Si solo se pasa un parámetro booleano, interpretamos que es el estado
+            let state = isLoadingState;
+            let element = elementOrState;
+            
+            if (typeof elementOrState === 'boolean') {
+                state = elementOrState;
+                element = null;
+            }
+            
+            isLoading = state;
+            
+            // Deshabilitar o habilitar botones durante la carga
+            const buttons = document.querySelectorAll('.btn-primary, .btn-danger, .btn-warning, .refresh-btn');
+            buttons.forEach(button => {
+                button.disabled = state;
+                if (state) {
+                    button.classList.add('loading-state');
+                } else {
+                    button.classList.remove('loading-state');
+                }
+            });
+            
+            // Mostrar u ocultar elementos de carga si se proporciona un elemento
+            if (element) {
+                if (state) {
+                    element.style.display = 'block';
+                } else {
+                    element.style.display = 'none';
+                }
+            }
         }
         
         // Iniciar sesión como administrador
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const password = document.getElementById('password').value;
+            if (isLoading) return;
+            
+            setLoading(true);
+            const password = document.getElementById('admin-password').value;
             
             try {
-                const response = await fetch('/api/admin/login', {
+                const data = await safeFetch(`${API_BASE_URL}/api/admin/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password })
                 });
-                
-                const data = await response.json();
                 
                 if (data.success) {
                     // Guardar la contraseña para futuras peticiones
@@ -224,29 +270,30 @@
                     adminDashboard.style.display = 'block';
                     
                     // Cargar datos iniciales
-                    loadStats();
-                    loadUsers();
+                    await Promise.all([loadStats(), loadUsers()]);
                 } else {
-                    showAlert(loginAlert, 'Contraseña incorrecta', 'danger');
+                    showAlert('Contraseña incorrecta', 'danger');
                 }
             } catch (error) {
-                showAlert(loginAlert, 'Error al intentar acceder: ' + error.message, 'danger');
+                showAlert('Error al intentar acceder: ' + error.message, 'danger');
+            } finally {
+                setLoading(false);
             }
         });
         
         // Cargar estadísticas
         async function loadStats() {
-            statsLoading.style.display = 'block';
-            statsContent.style.display = 'none';
+            if (isLoading) return;
             
             try {
-                const response = await fetch('/api/admin/stats', {
+                setLoading(statsLoading, true);
+                statsContent.style.display = 'none';
+                
+                const data = await safeFetch(`${API_BASE_URL}/api/admin/stats`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: adminPassword })
                 });
-                
-                const data = await response.json();
                 
                 if (data.success) {
                     document.getElementById('user-count').textContent = data.stats.userCount;
@@ -254,108 +301,115 @@
                     document.getElementById('last-activity').textContent = 
                         data.stats.lastMessageTime ? formatDate(data.stats.lastMessageTime) : 'Sin mensajes';
                     
-                    statsLoading.style.display = 'none';
+                    setLoading(statsLoading, false);
                     statsContent.style.display = 'grid';
                 } else {
-                    showAlert(dashboardAlert, 'Error al cargar estadísticas: ' + data.message, 'danger');
+                    showAlert('Error al cargar estadísticas: ' + data.message, 'danger');
                 }
             } catch (error) {
-                showAlert(dashboardAlert, 'Error al cargar estadísticas: ' + error.message, 'danger');
+                showAlert('Error al cargar estadísticas: ' + error.message, 'danger');
             }
         }
         
         // Cargar usuarios
         async function loadUsers() {
-            usersLoading.style.display = 'block';
-            usersTableContainer.style.display = 'none';
+            if (isLoading) return;
             
             try {
-                console.log('Cargando usuarios...');
-                const response = await fetch('/api/admin/users', {
+                setLoading(usersTbody.parentElement, true);
+                emptyUsersMessage.style.display = 'none';
+                
+                const data = await safeFetch(`${API_BASE_URL}/api/admin/users`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
-                const data = await response.json();
-                
                 if (data.success) {
                     // Limpiar tabla
-                    usersTableBody.innerHTML = '';
+                    usersTbody.innerHTML = '';
                     
                     if (data.users.length === 0) {
                         // Si no hay usuarios, mostrar mensaje
-                        usersTableBody.innerHTML = `
-                            <tr>
-                                <td colspan="5" style="text-align: center; padding: 20px;">
-                                    No hay usuarios registrados en el sistema
-                                </td>
-                            </tr>
-                        `;
+                        emptyUsersMessage.style.display = 'block';
                     } else {
                         // Agregar usuarios a la tabla
                         data.users.forEach(user => {
-                            const tr = document.createElement('tr');
-                            const isConnected = user.socketId !== null;
-                            // Acortar el ID para mejor visualización
-                            const shortId = user._id.substring(user._id.length - 8);
+                            const row = document.createElement('tr');
                             
-                            // Todos los usuarios están ahora verificados
-                            const userType = '<span class="user-badge registered" title="Usuario registrado"><i class="fas fa-user-check"></i></span>';
+                            // Verificar estado de conexión
+                            const isConnected = connectedUsers.some(u => u.email === user.email);
+                            const statusClass = isConnected ? 'connected' : 'disconnected';
+                            const statusText = isConnected ? 'Conectado' : 'Desconectado';
                             
-                            tr.innerHTML = `
-                                <td title="${user._id}">${shortId}...</td>
-                                <td title="${user.uuid || 'N/A'}">${user.uuid ? user.uuid.substring(0, 8) + '...' : 'N/A'}</td>
-                                <td>${user.username} ${userType}</td>
+                            row.innerHTML = `
+                                <td>${user.email || 'N/A'}</td>
+                                <td>${user.displayName || 'Sin nombre'}</td>
+                                <td>${formatDate(user.createdAt)}</td>
+                                <td><span class="status-indicator ${statusClass}">${statusText}</span></td>
                                 <td>
-                                    <span style="color: ${isConnected ? '#2ecc71' : '#e74c3c'}">
-                                        ${isConnected ? 'Conectado' : 'Desconectado'}
-                                    </span>
-                                </td>
-                                <td>${formatDate(user.lastActive)}</td>
-                                <td class="user-actions">
-                                    <button class="small-btn delete-user" data-id="${user._id}" data-name="${user.username}">
+                                    <button class="small-btn delete-user-btn" data-email="${user.email}" title="Eliminar usuario">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </td>
                             `;
                             
-                            usersTableBody.appendChild(tr);
-                        });
-                        
-                        // Agregar evento a los botones de eliminar
-                        document.querySelectorAll('.delete-user').forEach(button => {
-                            button.addEventListener('click', () => {
-                                const userId = button.getAttribute('data-id');
-                                const username = button.getAttribute('data-name');
-                                showDeleteUserConfirmation(userId, username);
-                            });
+                            usersTbody.appendChild(row);
                         });
                     }
                     
-                    // Verificar que la tabla se muestre correctamente
-                    usersLoading.style.display = 'none';
-                    usersTableContainer.style.display = 'block';
-                    
-                    // Imprimir un mensaje en la consola para confirmar que la tabla se está mostrando
-                    console.log('Tabla de usuarios cargada:', data.users.length, 'usuarios');
-                    console.log('Estado de visibilidad:', usersTableContainer.style.display);
+                    // Agregar listeners para botones de eliminar
+                    document.querySelectorAll('.delete-user-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const email = btn.getAttribute('data-email');
+                            showDeleteUserConfirmation(email);
+                        });
+                    });
                 } else {
-                    showAlert(dashboardAlert, 'Error al cargar usuarios: ' + data.message, 'danger');
+                    showAlert('Error al cargar usuarios: ' + data.message, 'danger');
                 }
             } catch (error) {
-                showAlert(dashboardAlert, 'Error al cargar usuarios: ' + error.message, 'danger');
+                showAlert('Error al cargar usuarios: ' + error.message, 'danger');
                 console.error('Error al cargar usuarios:', error);
+            } finally {
+                setLoading(usersTbody.parentElement, false);
             }
         }
         
-        // Mostrar confirmación para borrar usuario
-        function showDeleteUserConfirmation(userId, username) {
+        // Actualizar usuarios conectados
+        async function loadConnectedUsers() {
+            try {
+                refreshConnectionsBtn.classList.add('rotating');
+                const data = await safeFetch(`${API_BASE_URL}/api/admin/connected`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (data.success) {
+                    connectedUsers = data.users || [];
+                } else {
+                    connectedUsers = [];
+                    showAlert('Error al cargar usuarios conectados: ' + (data.message || 'Error desconocido'), 'warning');
+                }
+                
+                // Actualizar estado en la tabla
+                loadUsers();
+            } catch (error) {
+                console.error('Error al cargar usuarios conectados:', error);
+                showAlert('Error al cargar usuarios conectados', 'danger');
+            } finally {
+                refreshConnectionsBtn.classList.remove('rotating');
+            }
+        }
+        
+        // Mostrar confirmación para eliminar usuario
+        function showDeleteUserConfirmation(email) {
             modalTitle.textContent = 'Eliminar Usuario';
-            modalBody.textContent = `¿Estás seguro de que deseas eliminar al usuario "${username}"?`;
+            modalBody.textContent = `¿Estás seguro de que deseas eliminar el usuario ${email}? Esta acción no se puede deshacer.`;
             
             // Configurar botones
-            modalConfirm.onclick = () => deleteUser(userId, username);
+            modalConfirm.onclick = () => deleteUser(email);
             modalCancel.onclick = closeModal;
             
             // Mostrar modal
@@ -363,38 +417,36 @@
         }
         
         // Borrar usuario
-        async function deleteUser(userId, username) {
+        async function deleteUser(email) {
             closeModal();
             
+            if (isLoading) return;
+            setLoading(true);
+            
             try {
-                console.log(`Enviando solicitud para eliminar usuario ${userId}...`);
-                const response = await fetch('/api/admin/users/delete', {
-                    method: 'POST',
+                const data = await safeFetch(`${API_BASE_URL}/api/admin/user/` + encodeURIComponent(email), {
+                    method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        password: adminPassword,
-                        userId: userId
-                    })
+                    body: JSON.stringify({ password: adminPassword })
                 });
                 
-                const data = await response.json();
-                console.log('Respuesta recibida:', data);
-                
                 if (data.success) {
-                    showAlert(dashboardAlert, `Usuario "${username}" eliminado correctamente`, 'success');
-                    loadUsers(); // Actualizar la lista de usuarios
-                    loadStats(); // Actualizar estadísticas
+                    showAlert('Usuario ' + email + ' eliminado correctamente', 'success');
+                    await Promise.all([loadUsers(), loadStats()]);
                 } else {
-                    showAlert(dashboardAlert, 'Error al eliminar usuario: ' + data.message, 'danger');
+                    showAlert('Error al eliminar usuario: ' + data.message, 'danger');
                 }
             } catch (error) {
-                showAlert(dashboardAlert, 'Error al eliminar usuario: ' + error.message, 'danger');
-                console.error('Error en la petición:', error);
+                showAlert('Error al eliminar usuario: ' + error.message, 'danger');
+            } finally {
+                setLoading(false);
             }
         }
         
         // Mostrar confirmación para borrar todos los mensajes
         deleteAllMessagesBtn.addEventListener('click', () => {
+            if (isLoading) return;
+            
             modalTitle.textContent = 'Borrar Todos los Mensajes';
             modalBody.textContent = '¿Estás seguro de que deseas borrar TODOS los mensajes del chat? Esta acción no se puede deshacer.';
             
@@ -410,81 +462,33 @@
         async function deleteAllMessages() {
             closeModal();
             
+            if (isLoading) return;
+            setLoading(true);
+            
             try {
-                const response = await fetch('/api/admin/messages/delete-all', {
-                    method: 'POST',
+                const data = await safeFetch(`${API_BASE_URL}/api/admin/messages`, {
+                    method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
-                const data = await response.json();
-                
                 if (data.success) {
-                    showAlert(dashboardAlert, data.message, 'success');
-                    loadStats(); // Actualizar estadísticas
+                    showAlert(data.message, 'success');
+                    await loadStats();
                 } else {
-                    showAlert(dashboardAlert, 'Error al eliminar mensajes: ' + data.message, 'danger');
+                    showAlert('Error al eliminar mensajes: ' + data.message, 'danger');
                 }
             } catch (error) {
-                showAlert(dashboardAlert, 'Error al eliminar mensajes: ' + error.message, 'danger');
+                showAlert('Error al eliminar mensajes: ' + error.message, 'danger');
+            } finally {
+                setLoading(false);
             }
         }
-        
-        // Obtener referencia al botón de borrar todos los usuarios
-        const deleteAllUsersBtn = document.getElementById('delete-all-users');
-        
-        // Mostrar confirmación para borrar todos los usuarios
-        deleteAllUsersBtn.addEventListener('click', () => {
-            modalTitle.textContent = 'Borrar Todos los Usuarios';
-            modalBody.textContent = '¿Estás seguro de que deseas borrar TODOS los usuarios del chat? Esta acción desconectará a los usuarios activos y los enviará a la página de inicio. Esta acción no se puede deshacer.';
-            
-            // Configurar botones
-            modalConfirm.onclick = deleteAllUsers;
-            modalCancel.onclick = closeModal;
-            
-            // Mostrar modal
-            confirmationModal.style.display = 'flex';
-        });
-        
-        // Borrar todos los usuarios, incluyendo los conectados
-        async function deleteAllUsers() {
-            closeModal();
-            
-            try {
-                console.log('Enviando solicitud para eliminar todos los usuarios...');
-                const response = await fetch('/api/admin/users/delete-all-including-connected', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: adminPassword })
-                });
-                
-                console.log('Respuesta recibida');
-                const data = await response.json();
-                console.log('Datos de respuesta:', data);
-                
-                if (data.success) {
-                    showAlert(dashboardAlert, `${data.message}`, 'success');
-                    loadUsers(); // Actualizar la lista de usuarios
-                    loadStats(); // Actualizar estadísticas
-                } else {
-                    showAlert(dashboardAlert, 'Error al eliminar usuarios: ' + data.message, 'danger');
-                }
-            } catch (error) {
-                console.error('Error en la petición:', error);
-                showAlert(dashboardAlert, 'Error al eliminar usuarios: ' + error.message, 'danger');
-            }
-        }
-        
-        // Cerrar modal
-        function closeModal() {
-            confirmationModal.style.display = 'none';
-        }
-        
-        // Obtener referencia al botón de reinicio completo
-        const resetEverythingBtn = document.getElementById('reset-everything');
         
         // Mostrar confirmación para reinicio completo
         resetEverythingBtn.addEventListener('click', () => {
+            if (isLoading) return;
+            
             modalTitle.textContent = 'REINICIO COMPLETO';
             modalBody.innerHTML = `
                 <p style="color: #e74c3c; font-weight: bold; margin-bottom: 15px;">
@@ -517,49 +521,68 @@
         async function resetEverything() {
             closeModal();
             
+            if (isLoading) return;
+            setLoading(true);
+            
             try {
                 // Primero borramos todos los mensajes
-                const messagesResponse = await fetch('/api/admin/messages/delete-all', {
-                    method: 'POST',
+                const messagesResponse = await safeFetch(`${API_BASE_URL}/api/admin/messages`, {
+                    method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: adminPassword })
                 });
-                
-                const messagesData = await messagesResponse.json();
                 
                 // Luego borramos todos los usuarios
-                const usersResponse = await fetch('/api/admin/users/delete-all-including-connected', {
-                    method: 'POST',
+                const usersResponse = await safeFetch(`${API_BASE_URL}/api/admin/users`, {
+                    method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
-                const usersData = await usersResponse.json();
-                
                 // Mostrar resultados combinados
-                if (messagesData.success && usersData.success) {
+                if (messagesResponse.success && usersResponse.success) {
                     showAlert(
-                        dashboardAlert, 
-                        `Reinicio completo exitoso: ${messagesData.message} y ${usersData.message}`, 
+                        'Reinicio completo exitoso: ' + messagesResponse.message + ' y ' + usersResponse.message, 
                         'success'
                     );
                 } else {
                     let errorMessage = '';
-                    if (!messagesData.success) errorMessage += messagesData.message + ' ';
-                    if (!usersData.success) errorMessage += usersData.message;
+                    if (!messagesResponse.success) errorMessage += messagesResponse.message + ' ';
+                    if (!usersResponse.success) errorMessage += usersResponse.message;
                     
-                    showAlert(dashboardAlert, `Error en el reinicio: ${errorMessage}`, 'danger');
+                    showAlert('Error en el reinicio: ' + errorMessage, 'danger');
                 }
                 
                 // Actualizar estadísticas y usuarios
-                loadStats();
-                loadUsers();
+                await Promise.all([loadStats(), loadUsers()]);
                 
             } catch (error) {
-                console.error('Error en el reinicio completo:', error);
-                showAlert(dashboardAlert, 'Error en el reinicio completo: ' + error.message, 'danger');
+                showAlert('Error en el reinicio completo: ' + error.message, 'danger');
+            } finally {
+                setLoading(false);
             }
         }
+        
+        // Eventos de botones de recarga
+        refreshStatsBtn.addEventListener('click', async () => {
+            if (isLoading) return;
+            setLoading(true);
+            try {
+                await loadStats();
+            } finally {
+                setLoading(false);
+            }
+        });
+        
+        refreshConnectionsBtn.addEventListener('click', async () => {
+            if (isLoading) return;
+            setLoading(true);
+            try {
+                await loadConnectedUsers();
+            } finally {
+                setLoading(false);
+            }
+        });
         
         // Cerrar modal al hacer clic fuera
         window.addEventListener('click', (e) => {
@@ -567,6 +590,18 @@
                 closeModal();
             }
         });
+        
+        // Cerrar modal con tecla Escape
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && confirmationModal.style.display === 'flex') {
+                closeModal();
+            }
+        });
+        
+        // Cerrar modal
+        function closeModal() {
+            confirmationModal.style.display = 'none';
+        }
     </script>
 </body>
 </html> 

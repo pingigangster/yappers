@@ -1591,4 +1591,26 @@ body.join-page {
     100% {
         opacity: 1;
     }
+}
+
+/* Estilo para el botón durante el cooldown */
+.chat-form-container button.cooldown {
+    background-color: #888;
+    cursor: not-allowed;
+    opacity: 0.7;
+    transition: all 0.3s;
+}
+
+.chat-form-container button.cooldown:hover {
+    background-color: #888;
+    transform: none;
+}
+
+.char-counter {
+    position: absolute;
+    bottom: -20px;
+    right: 10px;
+    font-size: 0.8rem;
+    color: var(--light-color);
+    opacity: 0.7;
 } 

@@ -17,6 +17,26 @@ const MAX_MESSAGE_LENGTH = 200;
 // Obtener el nombre de usuario de la variable global
 let localUsername = window.username;
 
+// Variables para controlar la frecuencia de envío de mensajes
+let lastMessageTime = 0;
+let messageQueue = [];
+let messageProcessing = false;
+const MESSAGE_RATE_LIMIT = 500; // 500ms = 2 mensajes por segundo máximo
+const MAX_QUEUE_SIZE = 3; // Máximo de mensajes en cola
+const COOLDOWN_TIME = 2000; // 2 segundos de cooldown entre mensajes
+
+// Variable para el estado de cooldown
+let isCooldown = false;
+let cooldownTimer = null;
+let sendButton = null;
+
+// Variable para controlar las alertas de límite
+let rateLimitAlertDisplayed = false;
+
+// Cola de subida de archivos multimedia
+let mediaUploadQueue = [];
+let mediaUploadProcessing = false;
+
 // Mostrar el nombre de usuario en la interfaz
 if (usernameDisplay) {
     usernameDisplay.innerText = localUsername;
@@ -433,27 +453,140 @@ socket.on('historicalMessages', messages => {
     }
 });
 
+// Función para mostrar alerta de límite de mensajes
+function showRateLimitAlert() {
+    if (!rateLimitAlertDisplayed) {
+        rateLimitAlertDisplayed = true;
+        alert('Estás enviando mensajes demasiado rápido. Por favor, espera un momento antes de enviar más mensajes.');
+        
+        // Resetear el estado de la alerta después de un tiempo
+        setTimeout(() => {
+            rateLimitAlertDisplayed = false;
+        }, 3000);
+    }
+}
+
+// Función para verificar si se puede añadir un mensaje a la cola
+function canAddToQueue() {
+    // Si la cola está llena, no permitir más mensajes
+    if (messageQueue.length >= MAX_QUEUE_SIZE) {
+        showRateLimitAlert();
+        return false;
+    }
+    
+    return true;
+}
+
+// Función para procesar la cola de mensajes
+function processMessageQueue() {
+    if (messageQueue.length === 0) {
+        messageProcessing = false;
+        return;
+    }
+    
+    messageProcessing = true;
+    
+    const now = Date.now();
+    const timeSinceLastMessage = now - lastMessageTime;
+    
+    // Si no ha pasado suficiente tiempo desde el último mensaje, esperar
+    if (timeSinceLastMessage < MESSAGE_RATE_LIMIT) {
+        setTimeout(processMessageQueue, MESSAGE_RATE_LIMIT - timeSinceLastMessage);
+        return;
+    }
+    
+    // Procesar el siguiente mensaje en la cola
+    const message = messageQueue.shift();
+    
+    // Emitir mensaje al servidor
+    socket.emit('chatMessage', message);
+    console.log(`Mensaje enviado: ${message.substring(0, 20)}${message.length > 20 ? '...' : ''}`);
+    
+    // Actualizar tiempo del último mensaje
+    lastMessageTime = Date.now();
+    
+    // Si quedan mensajes en la cola, programar el siguiente procesamiento
+    if (messageQueue.length > 0) {
+        setTimeout(processMessageQueue, MESSAGE_RATE_LIMIT);
+    } else {
+        messageProcessing = false;
+    }
+}
+
+// Función para iniciar el cooldown
+function startCooldown() {
+    if (cooldownTimer) {
+        clearTimeout(cooldownTimer);
+    }
+    
+    isCooldown = true;
+    
+    // Deshabilitar botón de envío
+    if (!sendButton) {
+        sendButton = document.querySelector('#chat-form button[type="submit"]');
+    }
+    
+    if (sendButton) {
+        sendButton.disabled = true;
+        sendButton.classList.add('cooldown');
+        sendButton.innerHTML = '<i class="fas fa-hourglass-half"></i> Espera...';
+    }
+    
+    // Establecer temporizador para finalizar el cooldown
+    cooldownTimer = setTimeout(() => {
+        endCooldown();
+    }, COOLDOWN_TIME);
+}
+
+// Función para finalizar el cooldown
+function endCooldown() {
+    isCooldown = false;
+    
+    // Rehabilitar botón de envío
+    if (sendButton) {
+        sendButton.disabled = false;
+        sendButton.classList.remove('cooldown');
+        sendButton.innerHTML = 'Enviar';
+    }
+    
+    cooldownTimer = null;
+}
+
 // Enviar mensaje
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
 
-    // Obtener texto del mensaje
-    const msg = e.target.elements.msg.value;
+    // No hacer nada si estamos en cooldown
+    if (isCooldown) {
+        showRateLimitAlert();
+        return;
+    }
 
-    if (msg.trim() !== '') {
+    // Obtener texto del mensaje
+    const msg = e.target.elements.msg.value.trim();
+
+    if (msg !== '') {
+        // Verificar si podemos añadir el mensaje a la cola
+        if (!canAddToQueue()) {
+            return; // No seguir si no podemos añadir más mensajes
+        }
+        
         // Verificar si el mensaje excede el límite de caracteres
+        const finalMsg = msg.length > MAX_MESSAGE_LENGTH 
+            ? msg.substring(0, MAX_MESSAGE_LENGTH) 
+            : msg;
+        
         if (msg.length > MAX_MESSAGE_LENGTH) {
-            // Truncar el mensaje si es demasiado largo
-            const truncatedMsg = msg.substring(0, MAX_MESSAGE_LENGTH);
-            
             // Opcional: Mostrar una notificación
             alert(`El mensaje excede el límite de ${MAX_MESSAGE_LENGTH} caracteres. Se enviará truncado.`);
-            
-            // Emitir mensaje truncado al servidor
-            socket.emit('chatMessage', truncatedMsg);
-        } else {
-            // Emitir mensaje normal al servidor
-            socket.emit('chatMessage', msg);
+        }
+        
+        // Añadir mensaje a la cola
+        messageQueue.push(finalMsg);
+        
+        // Iniciar procesamiento si no está en curso
+        if (!messageProcessing) {
+            processMessageQueue();
         }
 
         // Limpiar input
@@ -463,6 +596,18 @@ chatForm.addEventListener('submit', (e) => {
         // Actualizar el contador a 0
         const counter = document.querySelector('.char-counter span');
         if (counter) counter.textContent = '0';
+        
+        // Iniciar cooldown
+        startCooldown();
+    }
+});
+
+// Manejar la tecla Enter para evitar enviar mensajes durante el cooldown
+messageInput.addEventListener('keydown', (e) => {
+    // Si es Enter y estamos en cooldown, prevenir la acción predeterminada
+    if (e.key === 'Enter' && !e.shiftKey && isCooldown) {
+        e.preventDefault();
+        showRateLimitAlert();
     }
 });
 
@@ -611,7 +756,42 @@ const progressContainer = setupProgressBar();
 const uploadProgressBar = progressContainer.querySelector('.upload-progress-bar');
 const progressText = progressContainer.querySelector('.upload-progress-text');
 
-// Función para manejar la subida de archivos multimedia
+// Función para procesar la cola de mensajes multimedia
+function processMediaUploadQueue() {
+    if (mediaUploadQueue.length === 0) {
+        mediaUploadProcessing = false;
+        return;
+    }
+    
+    mediaUploadProcessing = true;
+    
+    const now = Date.now();
+    const timeSinceLastMessage = now - lastMessageTime;
+    
+    // Si no ha pasado suficiente tiempo desde el último mensaje, esperar
+    if (timeSinceLastMessage < MESSAGE_RATE_LIMIT) {
+        setTimeout(processMediaUploadQueue, MESSAGE_RATE_LIMIT - timeSinceLastMessage);
+        return;
+    }
+    
+    // Procesar el siguiente archivo en la cola
+    const nextUpload = mediaUploadQueue.shift();
+    
+    // Procesar el archivo
+    handleMediaUploadInternal(nextUpload.file, nextUpload.text);
+    
+    // Actualizar tiempo del último mensaje
+    lastMessageTime = Date.now();
+    
+    // Si quedan archivos en la cola, programar el siguiente procesamiento
+    if (mediaUploadQueue.length > 0) {
+        setTimeout(processMediaUploadQueue, MESSAGE_RATE_LIMIT);
+    } else {
+        mediaUploadProcessing = false;
+    }
+}
+
+// Función principal de manejo de medios (control de cola)
 function handleMediaUpload(file) {
     console.log('Iniciando handleMediaUpload con archivo:', file ? file.name : 'ninguno');
     
@@ -620,11 +800,48 @@ function handleMediaUpload(file) {
         return;
     }
     
+    // No hacer nada si estamos en cooldown
+    if (isCooldown) {
+        showRateLimitAlert();
+        return;
+    }
+    
     if (file.size > MAX_FILE_SIZE) {
         alert(`El archivo es demasiado grande. El tamaño máximo es ${MAX_FILE_SIZE / (1024 * 1024)}MB.`);
         return;
     }
     
+    // Verificar si podemos añadir el archivo a la cola
+    if (mediaUploadQueue.length >= MAX_QUEUE_SIZE) {
+        showRateLimitAlert();
+        return; // No seguir si no podemos añadir más archivos
+    }
+    
+    // Obtener texto del campo de mensaje
+    const text = document.getElementById('msg').value.trim();
+    
+    // Añadir a la cola de carga de medios
+    mediaUploadQueue.push({ file, text });
+    console.log(`Archivo añadido a la cola: ${file.name}, ${formatFileSize(file.size)}`);
+    
+    // Limpiar el campo de mensaje
+    document.getElementById('msg').value = '';
+    
+    // Actualizar el contador si existe
+    const counter = document.querySelector('.char-counter span');
+    if (counter) counter.textContent = '0';
+    
+    // Iniciar procesamiento si no está en curso
+    if (!mediaUploadProcessing) {
+        processMediaUploadQueue();
+    }
+    
+    // Iniciar cooldown
+    startCooldown();
+}
+
+// Función interna que realmente procesa el archivo
+function handleMediaUploadInternal(file, text) {
     try {
         console.log('Procesando archivo de tamaño:', formatFileSize(file.size));
         
@@ -633,7 +850,6 @@ function handleMediaUpload(file) {
         console.log('Tipo de archivo detectado:', fileType);
         
         const isLargeFile = file.size > 15 * 1024 * 1024;
-        const text = document.getElementById('msg').value;
         
         // Ya no mostramos la barra de progreso global
         // progressContainer.style.display = 'none';
@@ -711,13 +927,6 @@ function handleMediaUpload(file) {
             setTimeout(() => {
                 tempDiv.remove();
             }, 1000);
-            
-            // Limpiar input de texto
-            document.getElementById('msg').value = '';
-            
-            // Actualizar contador
-            const counter = document.querySelector('.char-counter span');
-            if (counter) counter.textContent = '0';
         }
         
         // Basado en el tamaño del archivo, elegir entre carga estándar o fragmentada
@@ -1046,142 +1255,96 @@ function outputMediaMessage(message, doScroll = true) {
     const div = document.createElement('div');
     div.classList.add('message', 'fade-in');
     
-    // Añadir clase 'self' si el mensaje es del usuario actual
-    if (message.userId === socket.id) {
+    // Determinar si el mensaje es propio
+    if (message.username === localUsername) {
         div.classList.add('self');
     }
     
-    // Añadir clase para mensajes con archivo
-    if (message.fileType) {
-        div.classList.add('with-file');
-    }
-    
+    // Crear el contenido multimedia en función del tipo
     let mediaContent = '';
-    let fileName = '';
-    let fileSize = '';
     
-    // Extraer información del archivo
-    if (message.fileName) {
-        fileName = message.fileName;
-    }
-    
-    if (message.fileSize) {
-        fileSize = formatFileSize(message.fileSize);
-    }
-    
-    // URL del archivo - puede ser un data URL o una URL a GridFS
-    const mediaUrl = message.media;
-    
-    // Usar la URL de descarga optimizada para archivos grandes
-    const downloadUrl = message.isLargeFile && message.mediaId ? 
-        `/api/download/${message.mediaId}` : mediaUrl;
-    
-    // Determinar qué tipo de contenido multimedia mostrar
-    switch (message.fileType) {
-        case 'image':
-            mediaContent = `
-                <div class="file-container image-container">
-                    <img class="media-content" src="${mediaUrl}" alt="Imagen compartida">
-                    <a href="${downloadUrl}" download="${fileName || 'imagen_' + Date.now()}" class="download-btn" title="Descargar imagen">
-                        <i class="fas fa-download"></i>
-                    </a>
-                </div>
-            `;
-            break;
-        case 'gif':
-            mediaContent = `
-                <div class="file-container image-container">
-                    <img class="media-content" src="${mediaUrl}" alt="GIF compartido">
-                    <a href="${downloadUrl}" download="${fileName || 'gif_' + Date.now()}" class="download-btn" title="Descargar GIF">
-                        <i class="fas fa-download"></i>
-                    </a>
-                </div>
-            `;
-            break;
-        case 'video':
-            mediaContent = `
-                <div class="file-container video-container">
-                    <div class="video-wrapper">
-                        <video class="media-content" preload="metadata" controls>
-                            <source src="${mediaUrl}" type="video/mp4">
-                            Tu navegador no soporta videos.
-                        </video>
-                        <i class="fas fa-play-circle video-play-icon"></i>
-                    </div>
-                    <a href="${downloadUrl}" download="${fileName || 'video_' + Date.now()}" class="download-btn" title="Descargar video">
-                        <i class="fas fa-download"></i>
-                    </a>
-                </div>
-            `;
-            break;
-        case 'audio':
-            mediaContent = `
-                <div class="file-container audio-container">
-                    <audio class="media-content" controls>
-                        <source src="${mediaUrl}" type="audio/mpeg">
-                        Tu navegador no soporta audio.
-                    </audio>
-                    <a href="${downloadUrl}" download="${fileName || 'audio_' + Date.now()}" class="download-btn" title="Descargar audio">
-                        <i class="fas fa-download"></i>
-                    </a>
-                </div>
-            `;
-            break;
-        case 'pdf':
-        case 'word':
-        case 'excel':
-        case 'powerpoint':
-        case 'archive':
-        case 'text':
-        case 'code':
-        case 'file':
-            const fileIcons = {
-                pdf: 'fa-file-pdf',
-                word: 'fa-file-word',
-                excel: 'fa-file-excel',
-                powerpoint: 'fa-file-powerpoint',
-                archive: 'fa-file-archive',
-                text: 'fa-file-alt',
-                code: 'fa-file-code',
-                file: 'fa-file'
-            };
-            
-            const fileIcon = fileIcons[message.fileType] || 'fa-file';
-            const fileExtension = fileName ? fileName.split('.').pop().toLowerCase() : '';
-            
-            // Nombre para mostrar: priorizar el nombre real del archivo
-            let fileDisplayName = fileName || `Archivo ${message.fileType}`;
-            
-            mediaContent = `
-                <div class="document-wrapper">
-                    <div class="file-container document-container">
-                        <a href="${downloadUrl}" download="${fileDisplayName}" class="external-download-btn" title="Descargar archivo">
-                            <i class="fas fa-download"></i>
-                        </a>
-                        <div class="file-info">
-                            <i class="fas ${fileIcon} file-icon"></i>
-                            <div class="file-details">
-                                <span class="file-name" title="${fileDisplayName}">${fileDisplayName}</span>
-                                ${fileSize ? `<span class="file-size">${fileSize}</span>` : ''}
-                            </div>
-                        </div>
+    if (message.fileType === 'image') {
+        mediaContent = `
+            <div class="image-container">
+                <img src="${message.media}" alt="Imagen compartida" class="media-content">
+                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar imagen">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
+    } else if (message.fileType === 'gif') {
+        mediaContent = `
+            <div class="image-container">
+                <img src="${message.media}" alt="GIF compartido" class="media-content">
+                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar GIF">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
+    } else if (message.fileType === 'video') {
+        // URL para videos grandes almacenados en GridFS
+        const videoSrc = message.isLargeFile ? 
+            message.media : // URL a /api/files/{id}
+            message.media;   // Data URL para videos pequeños
+        
+        mediaContent = `
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <video src="${videoSrc}" class="media-content" preload="metadata"></video>
+                    <div class="video-play-icon">
+                        <i class="fas fa-play"></i>
                     </div>
                 </div>
-            `;
-            break;
-        default:
-            mediaContent = '<p>Tipo de archivo no soportado</p>';
+                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar video">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
+    } else if (message.fileType === 'audio') {
+        mediaContent = `
+            <div class="audio-container">
+                <audio controls src="${message.media}"></audio>
+                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar audio">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
+    } else {
+        // Archivos genéricos (PDF, DOC, etc.)
+        let fileIcon = 'fa-file';
+        
+        // Seleccionar icono según el tipo de archivo
+        switch (message.fileType) {
+            case 'pdf': fileIcon = 'fa-file-pdf'; break;
+            case 'word': fileIcon = 'fa-file-word'; break;
+            case 'excel': fileIcon = 'fa-file-excel'; break;
+            case 'powerpoint': fileIcon = 'fa-file-powerpoint'; break;
+            case 'archive': fileIcon = 'fa-file-archive'; break;
+            case 'text': fileIcon = 'fa-file-alt'; break;
+            case 'code': fileIcon = 'fa-file-code'; break;
+        }
+        
+        const fileSize = message.fileSize ? formatFileSize(message.fileSize) : 'Desconocido';
+        
+        // Crear contenedor de archivo
+        mediaContent = `
+            <div class="file-container">
+                <div class="file-info">
+                    <i class="fas ${fileIcon} file-icon"></i>
+                    <div class="file-details">
+                        <span class="file-name">${message.fileName || 'Archivo'}</span>
+                        <span class="file-size">${fileSize}</span>
+                    </div>
+                </div>
+                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar archivo">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
     }
-    
-    // Añadir indicador si es un archivo grande
-    const isLargeFileIndicator = message.isLargeFile ? 
-        `<span class="large-file-badge" title="Archivo grande almacenado en servidor"><i class="fas fa-cloud-download-alt"></i></span>` : '';
     
     div.innerHTML = `
-        <p class="meta">
-            ${message.username} <span>${message.time}</span>
-            ${isLargeFileIndicator}
-        </p>
+        <p class="meta">${message.username} <span>${message.time}</span></p>
         <div class="content">
             ${message.text ? `<p class="text-content">${message.text}</p>` : ''}
             <div class="media-container">
@@ -1189,6 +1352,7 @@ function outputMediaMessage(message, doScroll = true) {
             </div>
         </div>
     `;
+    
     document.querySelector('.chat-messages').appendChild(div);
     
     // Si es un video, manejar eventos de reproducción
@@ -1395,47 +1559,3 @@ function scrollToBottom() {
 
 // Inicializar el contador de caracteres
 setupCharacterCounter();
-
-// Event listener para botón de cerrar sesión
-document.addEventListener('DOMContentLoaded', () => {
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            
-            console.log('Cerrando sesión...');
-            
-            // Si hay un token (usuario autenticado), cerrar sesión en el servidor
-            if (window.token) {
-                try {
-                    await fetch('/api/auth/logout', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    
-                    console.log('Sesión cerrada en el servidor');
-                } catch (error) {
-                    console.error('Error al cerrar sesión en el servidor:', error);
-                }
-            }
-            
-            // Limpiar toda la información de sesión
-            console.log('Limpiando datos de sesión...');
-            
-            // Limpiar localStorage completamente
-            localStorage.removeItem('chatUsername');
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
-            localStorage.removeItem('username');
-            
-            // Limpiar las variables globales de window
-            window.token = null;
-            window.username = null;
-            
-            console.log('Sesión cerrada, redirigiendo a la página de inicio');
-            
-            // Redirigir a la página de inicio sin parámetros en la URL
-            window.location.href = 'index.html';
-        });
-    }
-}); 
