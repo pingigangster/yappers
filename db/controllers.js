@@ -318,31 +318,10 @@ const userController = {
     // Obtener todos los usuarios conectados
     async getConnectedUsers() {
         try {
-            console.log('Obteniendo usuarios conectados...');
-            // Buscar usuarios donde socketId no sea nulo y estén activos
-            const users = await User.find({ 
+            return await User.find({ 
                 socketId: { $ne: null },
                 isActive: true
-            }).sort({ username: 1 });
-            
-            console.log(`Encontrados ${users.length} usuarios conectados.`);
-            users.forEach((user, index) => {
-                console.log(`  ${index + 1}. Usuario: ${user.username}, Socket: ${user.socketId}`);
             });
-            
-            // Si no encontramos usuarios, registrarlo
-            if (users.length === 0) {
-                console.log('Advertencia: No se encontraron usuarios conectados');
-                
-                // Buscar cualquier usuario para diagnosticar
-                const allUsers = await User.find({}).limit(5);
-                console.log(`Usuarios en base de datos (primeros 5): ${allUsers.length}`);
-                allUsers.forEach((user, index) => {
-                    console.log(`  ${index + 1}. Usuario: ${user.username}, Socket: ${user.socketId || 'null'}, ID: ${user._id}`);
-                });
-            }
-            
-            return users;
         } catch (error) {
             console.error(`Error al obtener usuarios conectados: ${error}`);
             throw error;

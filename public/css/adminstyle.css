@@ -1,12 +1,14 @@
 :root {
     --admin-primary: #3498db;
+    --admin-primary-dark: #2980b9;
     --admin-secondary: #e74c3c;
-    --admin-dark: #2c3e50;
-    --admin-light: #ecf0f1;
     --admin-success: #2ecc71;
     --admin-warning: #f39c12;
-    --admin-gray: #95a5a6;
     --admin-white: #ffffff;
+    --admin-black: #2c3e50;
+    --admin-gray: #95a5a6;
+    --admin-light: #ecf0f1;
+    --admin-dark: #34495e;
     --admin-shadow: rgba(0, 0, 0, 0.1);
 }
 
@@ -115,6 +117,10 @@ body {
     transition: transform 0.2s, box-shadow 0.3s;
     border-radius: 12px;
     overflow: hidden;
+    background: var(--admin-white);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 3px 10px var(--admin-shadow);
 }
 
 .admin-card:hover {
@@ -335,6 +341,7 @@ tr:hover td {
     background-color: #e74c3c;
     color: white;
     transform: scale(1.1);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16);
 }
 
 .user-badge {
@@ -514,19 +521,25 @@ tr:hover td {
 .refresh-btn {
     background: none;
     border: none;
-    color: var(--admin-primary);
-    cursor: pointer;
-    padding: 8px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    transition: all 0.3s ease;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s ease;
+    color: var(--admin-primary);
 }
 
 .refresh-btn:hover {
-    background: rgba(52, 152, 219, 0.1);
-    transform: rotate(180deg);
+    background-color: var(--admin-primary);
+    color: white;
+    transform: rotate(30deg);
+}
+
+.refresh-btn.rotating {
+    animation: rotating 1s linear infinite;
 }
 
 .loading {
@@ -706,5 +719,15 @@ tr:hover td {
     }
     100% {
         transform: translateX(100%);
+    }
+}
+
+/* Animación de rotación */
+@keyframes rotating {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
     }
 } 

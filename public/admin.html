@@ -3,325 +3,770 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administrador - Chat</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/adminstyle.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>Panel de Administración</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #3498db;
+            --primary-dark: #2980b9;
+            --secondary: #e74c3c;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --dark: #34495e;
+            --light: #ecf0f1;
+            --gray: #95a5a6;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 4px 6px var(--shadow);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        /* Login Panel */
+        #login-panel {
+            max-width: 400px;
+            margin: 100px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px var(--shadow);
+        }
+
+        #login-panel h2 {
+            color: var(--dark);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+
+        input[type="password"]:focus,
+        input[type="text"]:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        /* Dashboard */
+        #admin-panel {
+            display: none;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px var(--shadow);
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            background: linear-gradient(to right, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            text-align: center;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-icon {
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: var(--gray);
+            font-size: 14px;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background: white;
+        }
+
+        thead {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tbody tr:hover {
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            font-weight: 500;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: middle;
+            user-select: none;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            line-height: 1.5;
+            border-radius: 4px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .btn-danger {
+            background-color: var(--secondary);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+
+        .btn-sm {
+            padding: 6px 10px;
+            font-size: 14px;
+        }
+
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .delete-btn {
+            background-color: rgba(231, 76, 60, 0.1);
+            color: var(--secondary);
+            border: none;
+        }
+
+        .delete-btn:hover {
+            background-color: var(--secondary);
+            color: white;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.3s;
+        }
+
+        .refresh-btn:hover {
+            transform: rotate(180deg);
+        }
+
+        .refresh-btn.loading {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Action buttons container */
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        /* Alerts */
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 350px;
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            animation: slideIn 0.3s ease-out forwards;
+            position: relative;
+        }
+
+        .alert-success {
+            background-color: rgba(46, 204, 113, 0.2);
+            border-left: 4px solid var(--success);
+            color: #27ae60;
+        }
+
+        .alert-danger {
+            background-color: rgba(231, 76, 60, 0.2);
+            border-left: 4px solid var(--secondary);
+            color: #c0392b;
+        }
+
+        .alert .close {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.7;
+        }
+
+        .alert .close:hover {
+            opacity: 1;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            color: var(--dark);
+            margin-bottom: 15px;
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            border-radius: inherit;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(52, 152, 219, 0.2);
+            border-radius: 50%;
+            border-left-color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            th, td {
+                padding: 10px;
+            }
+            
+            .card-header {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+            }
+        }
+
+        .empty-message {
+            text-align: center;
+            padding: 30px 0;
+            color: var(--gray);
+            font-style: italic;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-connected {
+            background-color: rgba(46, 204, 113, 0.2);
+            color: #27ae60;
+        }
+
+        .status-disconnected {
+            background-color: rgba(189, 195, 199, 0.2);
+            color: #7f8c8d;
+        }
+    </style>
 </head>
 <body>
-    <div class="admin-container">
-        <header class="admin-header">
-            <h1>Panel de Administrador</h1>
-        </header>
-        <main class="admin-body">
-            <!-- Sección de Login -->
-            <section id="login-section" class="admin-login-section">
-                <h2>Acceso</h2>
-                <div id="login-alert"></div>
-                <form id="admin-login-form">
-                    <div class="input-group">
-                        <label for="admin-password">Contraseña de Administrador</label>
-                        <input type="password" id="admin-password" name="password" placeholder="Ingresa la contraseña..." required>
-                    </div>
-                    <button type="submit" class="btn-primary">Acceder</button>
-                </form>
-            </section>
-            
-            <!-- Dashboard de Administrador (se muestra después del login) -->
-            <section id="admin-dashboard" class="admin-dashboard">
-                <div class="alert-container"></div>
-                
-                <!-- Contenido principal (izquierda) -->
-                <div class="admin-content">
-                    <!-- Tarjeta de Estadísticas -->
-                    <div class="admin-card">
-                        <h3>
-                            Estadísticas del Chat
-                            <button id="refresh-stats" class="refresh-btn" title="Actualizar estadísticas">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </h3>
-                        <div id="stats-loading" class="loading">
-                            <i class="fas fa-spinner"></i>
-                            <p>Cargando estadísticas...</p>
-                        </div>
-                        <div id="stats-content" class="stats-grid" style="display: none;">
-                            <div class="stat-card">
-                                <div class="stat-icon">
-                                    <i class="fas fa-users fa-2x" style="color: #6c5ce7;"></i>
-                                </div>
-                                <div class="stat-number" id="user-count">0</div>
-                                <div class="stat-label">Usuarios Registrados</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon">
-                                    <i class="fas fa-comments fa-2x" style="color: #00b894;"></i>
-                                </div>
-                                <div class="stat-number" id="message-count">0</div>
-                                <div class="stat-label">Mensajes Totales</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon">
-                                    <i class="fas fa-clock fa-2x" style="color: #fdcb6e;"></i>
-                                </div>
-                                <div class="stat-number" id="last-activity">-</div>
-                                <div class="stat-label">Último Mensaje</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Tarjeta de Gestión de Mensajes -->
-                    <div class="admin-card">
-                        <h3>Gestión de Mensajes</h3>
-                        <p>Desde aquí puedes borrar todos los mensajes del chat. Esta acción no se puede deshacer.</p>
-                        <button id="delete-all-messages-btn" class="btn-danger">
-                            <i class="fas fa-trash-alt"></i> 
-                            Borrar Todos los Mensajes
-                        </button>
-                    </div>
-                    
-                    <!-- Tarjeta para borrar todos los datos -->
-                    <div class="admin-card">
-                        <h3>Reinicio Completo</h3>
-                        <p>¡Precaución! Esta acción borrará todos los usuarios y mensajes del sistema. La aplicación volverá a su estado inicial.</p>
-                        <button id="reset-everything-btn" class="btn-danger" style="background: linear-gradient(to right, #e74c3c, #c0392b);">
-                            <i class="fas fa-exclamation-triangle"></i> 
-                            Reinicio Completo del Sistema
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Barra lateral (derecha) - Lista de usuarios -->
-                <div class="admin-sidebar">
-                    <div class="admin-card">
-                        <h3>
-                            Usuarios conectados
-                            <button class="refresh-btn" id="refresh-connections-btn" title="Actualizar usuarios conectados">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </h3>
-                        <div id="users-table-container">
-                            <table id="users-table">
-                                <thead>
-                                    <tr>
-                                        <th>Correo</th>
-                                        <th>Nombre</th>
-                                        <th>Fecha de registro</th>
-                                        <th>Estado</th>
-                                        <th>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="users-tbody">
-                                    <!-- Tabla de usuarios generada dinámicamente -->
-                                </tbody>
-                            </table>
-                            <div id="empty-users-message" class="empty-message" style="display: none;">
-                                No hay usuarios registrados en el sistema
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </main>
-        <footer class="admin-footer">
-            Panel de Administrador - Chat en Tiempo Real
-        </footer>
+    <div class="alert-container" id="alert-container"></div>
+    
+    <!-- Login Panel -->
+    <div id="login-panel">
+        <h2>Panel de Administración</h2>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="password">Contraseña de Administrador</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Iniciar Sesión</button>
+        </form>
     </div>
     
-    <!-- Modal de Confirmación -->
-    <div id="confirmation-modal" class="confirmation-modal">
-        <div class="modal-content">
-            <h3 class="modal-title" id="modal-title">Confirmación</h3>
-            <div class="modal-body" id="modal-body">
-                ¿Estás seguro de que deseas realizar esta acción?
+    <!-- Admin Panel -->
+    <div id="admin-panel" class="container">
+        <header>
+            <h1>Panel de Administración del Chat</h1>
+        </header>
+        
+        <!-- Stats Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Estadísticas</h2>
+                <button id="refresh-stats" class="refresh-btn" title="Actualizar estadísticas">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
             </div>
-            <div class="modal-actions">
-                <button id="modal-cancel" class="btn-primary">Cancelar</button>
-                <button id="modal-confirm" class="btn-danger">Confirmar</button>
+            <div class="card-body">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-number" id="total-users">0</div>
+                        <div class="stat-label">Usuarios Totales</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-comment-dots"></i>
+                        </div>
+                        <div class="stat-number" id="total-messages">0</div>
+                        <div class="stat-label">Mensajes Totales</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-plug"></i>
+                        </div>
+                        <div class="stat-number" id="connected-users">0</div>
+                        <div class="stat-label">Usuarios Conectados</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Users Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Gestión de Usuarios</h2>
+                <button id="refresh-users" class="refresh-btn" title="Actualizar usuarios">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-container">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Email</th>
+                                <th>Fecha de Registro</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody"></tbody>
+                    </table>
+                    <div id="empty-users" class="empty-message" style="display: none;">No hay usuarios registrados</div>
+                </div>
+                
+                <div class="actions">
+                    <button id="delete-all-users" class="btn btn-danger">
+                        <i class="fas fa-trash-alt"></i> Eliminar Todos los Usuarios
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Messages Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Gestión de Mensajes</h2>
+            </div>
+            <div class="card-body">
+                <div class="actions">
+                    <button id="delete-all-messages" class="btn btn-danger">
+                        <i class="fas fa-trash-alt"></i> Eliminar Todos los Mensajes
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Reset Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Reinicio del Sistema</h2>
+            </div>
+            <div class="card-body">
+                <p style="margin-bottom: 20px;">¡PELIGRO! Esta acción eliminará todos los usuarios y mensajes del sistema.</p>
+                <div class="actions">
+                    <button id="reset-everything" class="btn btn-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Reiniciar Sistema
+                    </button>
+                </div>
             </div>
         </div>
     </div>
     
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Confirmar Acción</h3>
+            <p id="modal-message">¿Estás seguro de realizar esta acción?</p>
+            <div class="modal-footer">
+                <button id="modal-cancel" class="btn btn-primary">Cancelar</button>
+                <button id="modal-confirm" class="btn btn-danger">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Variables globales
         let adminPassword = '';
-        let connectedUsers = [];
         const API_BASE_URL = window.location.origin;
         
         // Elementos DOM
-        const loginSection = document.getElementById('login-section');
-        const adminDashboard = document.getElementById('admin-dashboard');
-        const loginForm = document.getElementById('admin-login-form');
-        const loginAlert = document.getElementById('login-alert');
-        const alertContainer = document.querySelector('.alert-container');
-        const deleteAllMessagesBtn = document.getElementById('delete-all-messages-btn');
-        const refreshStatsBtn = document.getElementById('refresh-stats');
-        const refreshConnectionsBtn = document.getElementById('refresh-connections-btn');
-        const statsLoading = document.getElementById('stats-loading');
-        const statsContent = document.getElementById('stats-content');
+        const loginPanel = document.getElementById('login-panel');
+        const adminPanel = document.getElementById('admin-panel');
+        const loginForm = document.getElementById('login-form');
+        const usersTable = document.getElementById('users-table');
         const usersTbody = document.getElementById('users-tbody');
-        const emptyUsersMessage = document.getElementById('empty-users-message');
+        const emptyUsers = document.getElementById('empty-users');
+        const refreshStatsBtn = document.getElementById('refresh-stats');
+        const refreshUsersBtn = document.getElementById('refresh-users');
+        const totalUsersElement = document.getElementById('total-users');
+        const totalMessagesElement = document.getElementById('total-messages');
+        const connectedUsersElement = document.getElementById('connected-users');
+        const deleteAllUsersBtn = document.getElementById('delete-all-users');
+        const deleteAllMessagesBtn = document.getElementById('delete-all-messages');
+        const resetEverythingBtn = document.getElementById('reset-everything');
         const confirmationModal = document.getElementById('confirmation-modal');
         const modalTitle = document.getElementById('modal-title');
-        const modalBody = document.getElementById('modal-body');
-        const modalCancel = document.getElementById('modal-cancel');
-        const modalConfirm = document.getElementById('modal-confirm');
-        const resetEverythingBtn = document.getElementById('reset-everything-btn');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCancelBtn = document.getElementById('modal-cancel');
+        const modalConfirmBtn = document.getElementById('modal-confirm');
+        const alertContainer = document.getElementById('alert-container');
         
-        // Indicador de si se está realizando una operación
-        let isLoading = false;
+        // Estado de la aplicación
+        let loadingState = false;
         
         // Formatear fecha
-        function formatDate(timestamp) {
-            const date = new Date(timestamp);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        function formatDate(date) {
+            if (!date) return 'N/A';
+            const d = new Date(date);
+            return d.toLocaleString();
         }
         
-        // Mostrar alerta
+        // Mostrar alertas
         function showAlert(message, type = 'success') {
-            const alertElement = document.createElement('div');
-            alertElement.className = `alert alert-${type}`;
-            alertElement.textContent = message;
-            alertContainer.appendChild(alertElement);
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
             
-            // Eliminar alerta después de 5 segundos
+            const content = document.createElement('span');
+            content.textContent = message;
+            
+            const closeBtn = document.createElement('span');
+            closeBtn.className = 'close';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.onclick = function() {
+                alert.remove();
+            };
+            
+            alert.appendChild(content);
+            alert.appendChild(closeBtn);
+            alertContainer.appendChild(alert);
+            
+            // Auto-eliminar después de 5 segundos
             setTimeout(() => {
-                alertElement.style.opacity = '0';
-                setTimeout(() => alertElement.remove(), 300);
+                if (alertContainer.contains(alert)) {
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 300);
+                }
             }, 5000);
         }
         
-        // Manejar errores de fetch genéricos
-        async function safeFetch(url, options) {
-            try {
-                console.log(`Realizando petición a: ${url}`);
-                const response = await fetch(url, options);
+        // Control de estados de carga
+        function setLoading(element, isLoading) {
+            // Si ya hay un elemento con loading overlay, eliminarlo primero
+            const existingOverlay = element.querySelector('.loading-overlay');
+            if (existingOverlay) {
+                existingOverlay.remove();
+            }
+            
+            if (isLoading) {
+                const overlay = document.createElement('div');
+                overlay.className = 'loading-overlay';
                 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`Error en respuesta (${response.status}): ${errorText}`);
-                    throw new Error(`Error ${response.status}: ${errorText || response.statusText}`);
+                const spinner = document.createElement('div');
+                spinner.className = 'spinner';
+                
+                overlay.appendChild(spinner);
+                element.appendChild(overlay);
+            }
+        }
+        
+        // Realizar peticiones a la API con manejo de errores
+        async function fetchAPI(endpoint, options = {}) {
+            try {
+                // Asegurarse de que hay headers
+                if (!options.headers) {
+                    options.headers = {
+                        'Content-Type': 'application/json'
+                    };
                 }
                 
+                console.log(`Realizando petición a: ${API_BASE_URL}${endpoint}`);
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                
+                // Si la respuesta no es OK, lanzar error
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(`Error ${response.status}: ${text || response.statusText}`);
+                }
+                
+                // Parsear la respuesta como JSON
                 const data = await response.json();
-                console.log(`Respuesta exitosa:`, data);
                 return data;
             } catch (error) {
-                console.error(`Error en fetch a ${url}:`, error);
+                console.error(`Error en petición a ${endpoint}:`, error);
                 throw error;
             }
         }
         
-        // Control de estados de carga
-        function setLoading(elementOrState, isLoadingState = null) {
-            // Si solo se pasa un parámetro booleano, interpretamos que es el estado
-            let state = isLoadingState;
-            let element = elementOrState;
-            
-            if (typeof elementOrState === 'boolean') {
-                state = elementOrState;
-                element = null;
-            }
-            
-            isLoading = state;
-            
-            // Deshabilitar o habilitar botones durante la carga
-            const buttons = document.querySelectorAll('.btn-primary, .btn-danger, .btn-warning, .refresh-btn');
-            buttons.forEach(button => {
-                button.disabled = state;
-                if (state) {
-                    button.classList.add('loading-state');
-                } else {
-                    button.classList.remove('loading-state');
-                }
-            });
-            
-            // Mostrar u ocultar elementos de carga si se proporciona un elemento
-            if (element) {
-                if (state) {
-                    element.style.display = 'block';
-                } else {
-                    element.style.display = 'none';
-                }
-            }
-        }
-        
-        // Iniciar sesión como administrador
+        // Iniciar sesión
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (isLoading) return;
             
-            setLoading(true);
-            const password = document.getElementById('admin-password').value;
+            const passwordInput = document.getElementById('password');
+            const password = passwordInput.value;
+            
+            if (!password) {
+                showAlert('Por favor, introduce la contraseña', 'danger');
+                return;
+            }
             
             try {
-                const data = await safeFetch(`${API_BASE_URL}/api/admin/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password })
-                });
+                setLoading(loginForm, true);
                 
-                if (data.success) {
-                    // Guardar la contraseña para futuras peticiones
+                // Verificar localmente que la contraseña sea correcta
+                if (password === 'patatata123') {
+                    // Guardar contraseña para futuras peticiones
                     adminPassword = password;
                     
-                    // Ocultar login y mostrar dashboard
-                    loginSection.style.display = 'none';
-                    adminDashboard.style.display = 'block';
+                    // Ocultar login y mostrar panel
+                    loginPanel.style.display = 'none';
+                    adminPanel.style.display = 'block';
                     
                     // Cargar datos iniciales
-                    await Promise.all([loadStats(), loadUsers()]);
+                    loadStats();
+                    loadUsers();
+                    
+                    showAlert('Has iniciado sesión correctamente', 'success');
                 } else {
                     showAlert('Contraseña incorrecta', 'danger');
                 }
             } catch (error) {
-                showAlert('Error al intentar acceder: ' + error.message, 'danger');
+                showAlert(`Error al iniciar sesión: ${error.message}`, 'danger');
             } finally {
-                setLoading(false);
+                setLoading(loginForm, false);
             }
         });
         
         // Cargar estadísticas
         async function loadStats() {
-            if (isLoading) return;
-            
             try {
-                setLoading(statsLoading, true);
-                statsContent.style.display = 'none';
+                setLoading(document.querySelector('.stats-grid'), true);
+                refreshStatsBtn.classList.add('loading');
                 
-                const data = await safeFetch(`${API_BASE_URL}/api/admin/stats`, {
+                // Petición para estadísticas generales
+                const statsData = await fetchAPI('/api/admin/stats', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
-                if (data.success) {
-                    document.getElementById('user-count').textContent = data.stats.userCount;
-                    document.getElementById('message-count').textContent = data.stats.messageCount;
-                    document.getElementById('last-activity').textContent = 
-                        data.stats.lastMessageTime ? formatDate(data.stats.lastMessageTime) : 'Sin mensajes';
+                // Petición para obtener usuarios conectados
+                const usersData = await fetchAPI('/api/admin/users', {
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (statsData.success && usersData.success) {
+                    const connectedCount = usersData.users.filter(user => user.socketId && user.socketId !== 'undefined' && user.socketId !== '').length;
                     
-                    setLoading(statsLoading, false);
-                    statsContent.style.display = 'grid';
+                    totalUsersElement.textContent = statsData.stats.userCount || usersData.users.length;
+                    totalMessagesElement.textContent = statsData.stats.messageCount || 0;
+                    connectedUsersElement.textContent = connectedCount;
                 } else {
-                    showAlert('Error al cargar estadísticas: ' + data.message, 'danger');
+                    showAlert('Error al cargar estadísticas', 'danger');
                 }
             } catch (error) {
-                showAlert('Error al cargar estadísticas: ' + error.message, 'danger');
+                showAlert(`Error al cargar estadísticas: ${error.message}`, 'danger');
+            } finally {
+                setLoading(document.querySelector('.stats-grid'), false);
+                refreshStatsBtn.classList.remove('loading');
             }
         }
         
         // Cargar usuarios
         async function loadUsers() {
-            if (isLoading) return;
-            
             try {
-                setLoading(usersTbody.parentElement, true);
-                emptyUsersMessage.style.display = 'none';
+                setLoading(document.querySelector('.table-container'), true);
+                refreshUsersBtn.classList.add('loading');
                 
-                const data = await safeFetch(`${API_BASE_URL}/api/admin/users`, {
+                const data = await fetchAPI('/api/admin/users', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
@@ -330,278 +775,243 @@
                     usersTbody.innerHTML = '';
                     
                     if (data.users.length === 0) {
-                        // Si no hay usuarios, mostrar mensaje
-                        emptyUsersMessage.style.display = 'block';
+                        // Mostrar mensaje de vacío
+                        emptyUsers.style.display = 'block';
+                        usersTable.style.display = 'none';
                     } else {
-                        // Agregar usuarios a la tabla
+                        // Mostrar tabla y ocultar mensaje
+                        emptyUsers.style.display = 'none';
+                        usersTable.style.display = 'table';
+                        
+                        // Agregar filas
                         data.users.forEach(user => {
-                            const row = document.createElement('tr');
+                            const tr = document.createElement('tr');
                             
-                            // Verificar estado de conexión
-                            const isConnected = connectedUsers.some(u => u.email === user.email);
-                            const statusClass = isConnected ? 'connected' : 'disconnected';
+                            // Determinar estado - Corrección para detectar conectados correctamente
+                            const isConnected = user.socketId && user.socketId !== 'undefined' && user.socketId !== '';
+                            const statusClass = isConnected ? 'status-connected' : 'status-disconnected';
                             const statusText = isConnected ? 'Conectado' : 'Desconectado';
                             
-                            row.innerHTML = `
+                            tr.innerHTML = `
+                                <td>${user.username || 'Sin nombre'}</td>
                                 <td>${user.email || 'N/A'}</td>
-                                <td>${user.displayName || 'Sin nombre'}</td>
                                 <td>${formatDate(user.createdAt)}</td>
-                                <td><span class="status-indicator ${statusClass}">${statusText}</span></td>
+                                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td>
-                                    <button class="small-btn delete-user-btn" data-email="${user.email}" title="Eliminar usuario">
-                                        <i class="fas fa-trash-alt"></i>
+                                    <button class="icon-btn delete-btn" data-id="${user._id}" title="Eliminar usuario">
+                                        <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
                             `;
                             
-                            usersTbody.appendChild(row);
+                            usersTbody.appendChild(tr);
+                        });
+                        
+                        // Agregar eventos a botones de eliminar
+                        document.querySelectorAll('.delete-btn').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                const userId = btn.getAttribute('data-id');
+                                showDeleteUserConfirmation(userId);
+                            });
                         });
                     }
-                    
-                    // Agregar listeners para botones de eliminar
-                    document.querySelectorAll('.delete-user-btn').forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            const email = btn.getAttribute('data-email');
-                            showDeleteUserConfirmation(email);
-                        });
-                    });
                 } else {
-                    showAlert('Error al cargar usuarios: ' + data.message, 'danger');
+                    showAlert('Error al cargar usuarios', 'danger');
                 }
             } catch (error) {
-                showAlert('Error al cargar usuarios: ' + error.message, 'danger');
-                console.error('Error al cargar usuarios:', error);
+                showAlert(`Error al cargar usuarios: ${error.message}`, 'danger');
             } finally {
-                setLoading(usersTbody.parentElement, false);
+                setLoading(document.querySelector('.table-container'), false);
+                refreshUsersBtn.classList.remove('loading');
             }
         }
         
-        // Actualizar usuarios conectados
-        async function loadConnectedUsers() {
-            try {
-                refreshConnectionsBtn.classList.add('rotating');
-                const data = await safeFetch(`${API_BASE_URL}/api/admin/connected`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: adminPassword })
-                });
-                
-                if (data.success) {
-                    connectedUsers = data.users || [];
-                } else {
-                    connectedUsers = [];
-                    showAlert('Error al cargar usuarios conectados: ' + (data.message || 'Error desconocido'), 'warning');
-                }
-                
-                // Actualizar estado en la tabla
-                loadUsers();
-            } catch (error) {
-                console.error('Error al cargar usuarios conectados:', error);
-                showAlert('Error al cargar usuarios conectados', 'danger');
-            } finally {
-                refreshConnectionsBtn.classList.remove('rotating');
-            }
+        // Mostrar modal de confirmación
+        function showModal(title, message, confirmCallback) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            
+            // Configurar botones
+            modalCancelBtn.onclick = closeModal;
+            modalConfirmBtn.onclick = () => {
+                closeModal();
+                confirmCallback();
+            };
+            
+            // Mostrar modal
+            confirmationModal.style.display = 'flex';
+        }
+        
+        // Cerrar modal
+        function closeModal() {
+            confirmationModal.style.display = 'none';
         }
         
         // Mostrar confirmación para eliminar usuario
-        function showDeleteUserConfirmation(email) {
-            modalTitle.textContent = 'Eliminar Usuario';
-            modalBody.textContent = `¿Estás seguro de que deseas eliminar el usuario ${email}? Esta acción no se puede deshacer.`;
-            
-            // Configurar botones
-            modalConfirm.onclick = () => deleteUser(email);
-            modalCancel.onclick = closeModal;
-            
-            // Mostrar modal
-            confirmationModal.style.display = 'flex';
+        function showDeleteUserConfirmation(userId) {
+            showModal(
+                'Eliminar Usuario', 
+                '¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.',
+                () => deleteUser(userId)
+            );
         }
         
-        // Borrar usuario
-        async function deleteUser(email) {
-            closeModal();
-            
-            if (isLoading) return;
-            setLoading(true);
-            
+        // Eliminar usuario
+        async function deleteUser(userId) {
             try {
-                const data = await safeFetch(`${API_BASE_URL}/api/admin/user/` + encodeURIComponent(email), {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: adminPassword })
+                setLoading(document.querySelector('.table-container'), true);
+                
+                const response = await fetchAPI(`/api/admin/users/delete`, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        password: adminPassword,
+                        userId: userId
+                    })
                 });
                 
-                if (data.success) {
-                    showAlert('Usuario ' + email + ' eliminado correctamente', 'success');
-                    await Promise.all([loadUsers(), loadStats()]);
+                if (response.success) {
+                    showAlert('Usuario eliminado correctamente', 'success');
+                    // Recargar datos
+                    loadUsers();
+                    loadStats();
                 } else {
-                    showAlert('Error al eliminar usuario: ' + data.message, 'danger');
+                    showAlert(`Error al eliminar usuario: ${response.message}`, 'danger');
                 }
             } catch (error) {
-                showAlert('Error al eliminar usuario: ' + error.message, 'danger');
+                showAlert(`Error al eliminar usuario: ${error.message}`, 'danger');
             } finally {
-                setLoading(false);
+                setLoading(document.querySelector('.table-container'), false);
             }
         }
         
-        // Mostrar confirmación para borrar todos los mensajes
-        deleteAllMessagesBtn.addEventListener('click', () => {
-            if (isLoading) return;
-            
-            modalTitle.textContent = 'Borrar Todos los Mensajes';
-            modalBody.textContent = '¿Estás seguro de que deseas borrar TODOS los mensajes del chat? Esta acción no se puede deshacer.';
-            
-            // Configurar botones
-            modalConfirm.onclick = deleteAllMessages;
-            modalCancel.onclick = closeModal;
-            
-            // Mostrar modal
-            confirmationModal.style.display = 'flex';
+        // Mostrar confirmación para eliminar todos los usuarios
+        deleteAllUsersBtn.addEventListener('click', () => {
+            showModal(
+                'Eliminar Todos los Usuarios',
+                '¿Estás seguro de que deseas eliminar TODOS los usuarios? Esta acción no se puede deshacer y desconectará a los usuarios activos.',
+                deleteAllUsers
+            );
         });
         
-        // Borrar todos los mensajes
-        async function deleteAllMessages() {
-            closeModal();
-            
-            if (isLoading) return;
-            setLoading(true);
-            
+        // Eliminar todos los usuarios
+        async function deleteAllUsers() {
             try {
-                const data = await safeFetch(`${API_BASE_URL}/api/admin/messages`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                setLoading(document.querySelector('.table-container'), true);
+                
+                const response = await fetchAPI('/api/admin/users/delete-all-including-connected', {
+                    method: 'POST',
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
-                if (data.success) {
-                    showAlert(data.message, 'success');
-                    await loadStats();
+                if (response.success) {
+                    showAlert('Todos los usuarios han sido eliminados', 'success');
+                    // Recargar datos
+                    loadUsers();
+                    loadStats();
                 } else {
-                    showAlert('Error al eliminar mensajes: ' + data.message, 'danger');
+                    showAlert(`Error al eliminar usuarios: ${response.message}`, 'danger');
                 }
             } catch (error) {
-                showAlert('Error al eliminar mensajes: ' + error.message, 'danger');
+                showAlert(`Error al eliminar usuarios: ${error.message}`, 'danger');
             } finally {
-                setLoading(false);
+                setLoading(document.querySelector('.table-container'), false);
+            }
+        }
+        
+        // Mostrar confirmación para eliminar todos los mensajes
+        deleteAllMessagesBtn.addEventListener('click', () => {
+            showModal(
+                'Eliminar Todos los Mensajes',
+                '¿Estás seguro de que deseas eliminar TODOS los mensajes? Esta acción no se puede deshacer.',
+                deleteAllMessages
+            );
+        });
+        
+        // Eliminar todos los mensajes
+        async function deleteAllMessages() {
+            try {
+                setLoading(document.querySelector('.card:nth-child(3)'), true);
+                
+                const response = await fetchAPI('/api/admin/messages/delete-all', {
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (response.success) {
+                    showAlert('Todos los mensajes han sido eliminados', 'success');
+                    // Recargar estadísticas
+                    loadStats();
+                } else {
+                    showAlert(`Error al eliminar mensajes: ${response.message}`, 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error al eliminar mensajes: ${error.message}`, 'danger');
+            } finally {
+                setLoading(document.querySelector('.card:nth-child(3)'), false);
             }
         }
         
         // Mostrar confirmación para reinicio completo
         resetEverythingBtn.addEventListener('click', () => {
-            if (isLoading) return;
-            
-            modalTitle.textContent = 'REINICIO COMPLETO';
-            modalBody.innerHTML = `
-                <p style="color: #e74c3c; font-weight: bold; margin-bottom: 15px;">
-                    ¡ADVERTENCIA! Esta es una acción IRREVERSIBLE.
-                </p>
-                <p>
-                    Estás a punto de eliminar permanentemente:
-                </p>
-                <ul style="margin: 10px 0 15px 20px; text-align: left;">
-                    <li>Todos los mensajes del chat</li>
-                    <li>Todos los usuarios (anónimos y registrados)</li>
-                </ul>
-                <p>
-                    Los usuarios conectados serán desconectados y redirigidos a la página de inicio.
-                </p>
-                <p style="font-weight: bold; margin-top: 15px;">
-                    ¿Estás COMPLETAMENTE seguro de que deseas continuar?
-                </p>
-            `;
-            
-            // Configurar botones
-            modalConfirm.onclick = resetEverything;
-            modalCancel.onclick = closeModal;
-            
-            // Mostrar modal
-            confirmationModal.style.display = 'flex';
+            showModal(
+                'Reinicio Completo del Sistema',
+                '¡ADVERTENCIA! Esta acción eliminará TODOS los usuarios y mensajes del sistema. Esta operación no se puede deshacer y desconectará a todos los usuarios. ¿Estás completamente seguro?',
+                resetEverything
+            );
         });
         
-        // Reinicio completo: borrar todos los usuarios y mensajes
+        // Reinicio completo
         async function resetEverything() {
-            closeModal();
-            
-            if (isLoading) return;
-            setLoading(true);
-            
             try {
-                // Primero borramos todos los mensajes
-                const messagesResponse = await safeFetch(`${API_BASE_URL}/api/admin/messages`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                setLoading(document.querySelector('.card:nth-child(4)'), true);
+                
+                // Eliminar todos los mensajes
+                const messagesResponse = await fetchAPI('/api/admin/messages/delete-all', {
+                    method: 'POST',
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
-                // Luego borramos todos los usuarios
-                const usersResponse = await safeFetch(`${API_BASE_URL}/api/admin/users`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                // Eliminar todos los usuarios
+                const usersResponse = await fetchAPI('/api/admin/users/delete-all-including-connected', {
+                    method: 'POST',
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
-                // Mostrar resultados combinados
                 if (messagesResponse.success && usersResponse.success) {
-                    showAlert(
-                        'Reinicio completo exitoso: ' + messagesResponse.message + ' y ' + usersResponse.message, 
-                        'success'
-                    );
+                    showAlert('Sistema reiniciado correctamente', 'success');
+                    // Recargar datos
+                    loadUsers();
+                    loadStats();
                 } else {
-                    let errorMessage = '';
-                    if (!messagesResponse.success) errorMessage += messagesResponse.message + ' ';
-                    if (!usersResponse.success) errorMessage += usersResponse.message;
-                    
-                    showAlert('Error en el reinicio: ' + errorMessage, 'danger');
+                    let errorMsg = '';
+                    if (!messagesResponse.success) errorMsg += 'Error al eliminar mensajes. ';
+                    if (!usersResponse.success) errorMsg += 'Error al eliminar usuarios.';
+                    showAlert(errorMsg, 'danger');
                 }
-                
-                // Actualizar estadísticas y usuarios
-                await Promise.all([loadStats(), loadUsers()]);
-                
             } catch (error) {
-                showAlert('Error en el reinicio completo: ' + error.message, 'danger');
+                showAlert(`Error al reiniciar sistema: ${error.message}`, 'danger');
             } finally {
-                setLoading(false);
+                setLoading(document.querySelector('.card:nth-child(4)'), false);
             }
         }
         
-        // Eventos de botones de recarga
-        refreshStatsBtn.addEventListener('click', async () => {
-            if (isLoading) return;
-            setLoading(true);
-            try {
-                await loadStats();
-            } finally {
-                setLoading(false);
-            }
-        });
+        // Eventos para botones de actualizar
+        refreshStatsBtn.addEventListener('click', loadStats);
+        refreshUsersBtn.addEventListener('click', loadUsers);
         
-        refreshConnectionsBtn.addEventListener('click', async () => {
-            if (isLoading) return;
-            setLoading(true);
-            try {
-                await loadConnectedUsers();
-            } finally {
-                setLoading(false);
-            }
-        });
-        
-        // Cerrar modal al hacer clic fuera
+        // Cerrar modal si se hace clic fuera
         window.addEventListener('click', (e) => {
             if (e.target === confirmationModal) {
                 closeModal();
             }
         });
         
-        // Cerrar modal con tecla Escape
+        // Manejar tecla ESC para cerrar modal
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && confirmationModal.style.display === 'flex') {
                 closeModal();
             }
         });
-        
-        // Cerrar modal
-        function closeModal() {
-            confirmationModal.style.display = 'none';
-        }
     </script>
 </body>
-</html> 
+</html>
