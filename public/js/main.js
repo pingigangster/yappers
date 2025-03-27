@@ -850,7 +850,8 @@ function handleMediaUploadInternal(file, text) {
         const fileType = getFileType(file);
         console.log('Tipo de archivo detectado:', fileType);
         
-        const isLargeFile = file.size > 15 * 1024 * 1024;
+        // Considerar todos los videos como archivos grandes para asegurar que se guarden en GridFS
+        const isLargeFile = file.size > 15 * 1024 * 1024 || fileType === 'video';
         
         // Ya no mostramos la barra de progreso global
         // progressContainer.style.display = 'none';
@@ -952,10 +953,15 @@ function handleMediaUploadInternal(file, text) {
                 }
             }, 250);
             
-            // Configuración especial para videos pequeños
+            // Verificar si es un video
             const isVideo = (fileType === 'video');
+            
+            // Si es un video, usar uploadLargeFile en su lugar
             if (isVideo) {
-                console.log('Detectado video pequeño, usando configuración especial');
+                console.log('Detectado video, usando uploadLargeFile para procesarlo correctamente');
+                clearInterval(progressInterval);
+                uploadLargeFile();
+                return;
             }
             
             // Crear FileReader para leer el archivo
@@ -1283,20 +1289,19 @@ function outputMediaMessage(message, doScroll = true) {
             </div>
         `;
     } else if (message.fileType === 'video') {
-        // URL para videos grandes almacenados en GridFS
-        const videoSrc = message.isLargeFile ? 
-            message.media : // URL a /api/files/{id}
-            message.media;   // Data URL para videos pequeños
+        // Siempre tratar los videos como archivos almacenados en GridFS
+        // independientemente de su tamaño
+        const videoSrc = message.media;
         
         mediaContent = `
             <div class="video-container">
                 <div class="video-wrapper">
-                    <video src="${videoSrc}" class="media-content" preload="metadata"></video>
+                    <video src="${videoSrc}" class="media-content" preload="metadata" controls></video>
                     <div class="video-play-icon">
                         <i class="fas fa-play"></i>
                     </div>
                 </div>
-                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar video">
+                <a href="${message.media}" class="download-btn" download="${message.fileName || 'video'}" title="Descargar video">
                     <i class="fas fa-download"></i>
                 </a>
             </div>
