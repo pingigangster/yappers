@@ -460,6 +460,9 @@
     <div id="admin-panel" class="container">
         <header>
             <h1>Panel de Administración del Chat</h1>
+            <button id="logout-btn" class="btn btn-danger" style="position: absolute; right: 20px; top: 20px;">
+                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </button>
         </header>
         
         <!-- Stats Card -->
@@ -598,9 +601,58 @@
         const modalCancelBtn = document.getElementById('modal-cancel');
         const modalConfirmBtn = document.getElementById('modal-confirm');
         const alertContainer = document.getElementById('alert-container');
+        const logoutBtn = document.getElementById('logout-btn');
         
         // Estado de la aplicación
         let loadingState = false;
+        
+        // Verificar si hay una sesión guardada al cargar la página
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedSession = localStorage.getItem('adminSession');
+            if (savedSession) {
+                try {
+                    // Recuperar la contraseña guardada
+                    adminPassword = savedSession;
+                    
+                    // Ocultar login y mostrar panel
+                    loginPanel.style.display = 'none';
+                    adminPanel.style.display = 'block';
+                    
+                    // Cargar datos iniciales
+                    loadStats();
+                    loadUsers();
+                } catch (error) {
+                    console.error('Error al recuperar sesión:', error);
+                    // Si hay algún error, limpiar la sesión
+                    logout();
+                }
+            }
+        });
+        
+        // Función para cerrar sesión
+        function logout() {
+            // Limpiar localStorage
+            localStorage.removeItem('adminSession');
+            
+            // Limpiar variables
+            adminPassword = '';
+            
+            // Mostrar login y ocultar panel
+            loginPanel.style.display = 'block';
+            adminPanel.style.display = 'none';
+            
+            // Limpiar datos sensibles
+            document.getElementById('password').value = '';
+        }
+        
+        // Evento para botón de cerrar sesión
+        logoutBtn.addEventListener('click', () => {
+            showModal(
+                'Cerrar Sesión',
+                '¿Estás seguro de que deseas cerrar la sesión?',
+                logout
+            );
+        });
         
         // Formatear fecha
         function formatDate(date) {
@@ -704,6 +756,9 @@
                 if (password === 'patatata123') {
                     // Guardar contraseña para futuras peticiones
                     adminPassword = password;
+                    
+                    // Guardar sesión en localStorage
+                    localStorage.setItem('adminSession', adminPassword);
                     
                     // Ocultar login y mostrar panel
                     loginPanel.style.display = 'none';
