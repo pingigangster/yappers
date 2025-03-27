@@ -8,6 +8,7 @@ const imgModal = document.getElementById('img-modal');
 const modalContent = document.querySelector('.modal-content');
 const closeBtn = document.querySelector('.close-btn');
 const messageInput = document.getElementById('msg');
+const logoutBtn = document.getElementById('logout-btn');
 
 // Tamaño máximo para archivos multimedia (200 MB)
 const MAX_FILE_SIZE = 200 * 1024 * 1024;
@@ -1559,3 +1560,48 @@ function scrollToBottom() {
 
 // Inicializar el contador de caracteres
 setupCharacterCounter();
+
+// Función para cerrar sesión
+function logout() {
+    console.log('Cerrando sesión...');
+    
+    // Llamar a la API de logout
+    fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Respuesta de logout:', data);
+        
+        // Limpiar datos de sesión en localStorage
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        
+        // Si hay socket activo, desconectar
+        if (socket && socket.connected) {
+            socket.disconnect();
+        }
+        
+        // Redirigir a la página de inicio
+        window.location.href = 'index.html';
+    })
+    .catch(error => {
+        console.error('Error al cerrar sesión:', error);
+        // Incluso si hay error, limpiar localStorage y redirigir
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        window.location.href = 'index.html';
+    });
+}
+
+// Agregar evento de clic al botón de logout
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        logout();
+    });
+}
