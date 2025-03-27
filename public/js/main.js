@@ -23,8 +23,14 @@ let lastMessageTime = 0;
 let messageQueue = [];
 let messageProcessing = false;
 const MESSAGE_RATE_LIMIT = 500; // 500ms = 2 mensajes por segundo máximo
-const MAX_QUEUE_SIZE = 3; // Máximo de mensajes en cola
-const COOLDOWN_TIME = 2000; // 2 segundos de cooldown entre mensajes
+const MAX_QUEUE_SIZE = 10; // Máximo de mensajes en cola (aumentado a 10)
+const COOLDOWN_TIME = 2000; // 2 segundos de cooldown
+const BURST_MESSAGES_LIMIT = 10; // Número de mensajes rápidos antes de activar cooldown (aumentado a 10)
+
+// Variables para control de ráfaga de mensajes
+let messagesSentInBurst = 0;
+let lastBurstResetTime = 0;
+const BURST_RESET_TIME = 10000; // Tiempo para resetear el contador de ráfaga (10 segundos)
 
 // Variable para el estado de cooldown
 let isCooldown = false;
@@ -499,8 +505,27 @@ function processMessageQueue() {
     // Procesar el siguiente mensaje en la cola
     const message = messageQueue.shift();
     
-    // Emitir mensaje al servidor
-    socket.emit('chatMessage', message);
+    // Crear un mensaje local temporal para mostrar feedback inmediato al usuario
+    const tempMsgDiv = addTempMessage(message);
+    
+    // Emitir mensaje al servidor con callback para confirmar recepción
+    socket.emit('chatMessage', message, (response) => {
+        if (response && response.success) {
+            // Mensaje guardado correctamente
+            if (tempMsgDiv) {
+                tempMsgDiv.classList.remove('pending');
+                tempMsgDiv.classList.add('confirmed');
+            }
+        } else {
+            // Error al guardar mensaje
+            if (tempMsgDiv) {
+                tempMsgDiv.classList.remove('pending');
+                tempMsgDiv.classList.add('error');
+            }
+            console.error('Error al guardar mensaje:', response ? response.error : 'No response');
+        }
+    });
+    
     console.log(`Mensaje enviado: ${message.substring(0, 20)}${message.length > 20 ? '...' : ''}`);
     
     // Actualizar tiempo del último mensaje
@@ -512,6 +537,31 @@ function processMessageQueue() {
     } else {
         messageProcessing = false;
     }
+}
+
+// Función para añadir mensaje temporal mientras se confirma
+function addTempMessage(message) {
+    const div = document.createElement('div');
+    div.classList.add('message', 'self', 'pending', 'fade-in');
+    div.innerHTML = `
+        <p class="meta">${localUsername} <span>${moment().format('HH:mm')}</span></p>
+        <div class="content">
+            <p class="text-content">${message}</p>
+            <div class="status-indicator">
+                <i class="fas fa-clock"></i>
+            </div>
+        </div>
+    `;
+    
+    document.querySelector('.chat-messages').appendChild(div);
+    
+    // Activar animación de entrada
+    setTimeout(() => {
+        div.classList.add('active');
+    }, 10);
+    
+    scrollToBottom();
+    return div;
 }
 
 // Función para iniciar el cooldown
@@ -550,7 +600,35 @@ function endCooldown() {
         sendButton.innerHTML = 'Enviar';
     }
     
+    // Resetear contador de mensajes en ráfaga después del cooldown
+    messagesSentInBurst = 0;
+    lastBurstResetTime = Date.now();
+    
     cooldownTimer = null;
+}
+
+// Función para verificar si se debe activar el cooldown
+function shouldActivateCooldown() {
+    const now = Date.now();
+    
+    // Si ha pasado mucho tiempo desde el último mensaje,
+    // resetear el contador de ráfaga
+    if (now - lastBurstResetTime > BURST_RESET_TIME) {
+        messagesSentInBurst = 0;
+        lastBurstResetTime = now;
+        return false;
+    }
+    
+    // Incrementar contador de mensajes en ráfaga
+    messagesSentInBurst++;
+    
+    // Verificar si se ha alcanzado el límite de mensajes en ráfaga
+    if (messagesSentInBurst >= BURST_MESSAGES_LIMIT) {
+        console.log(`Límite de ráfaga alcanzado (${BURST_MESSAGES_LIMIT} mensajes). Activando cooldown.`);
+        return true;
+    }
+    
+    return false;
 }
 
 // Enviar mensaje
@@ -598,8 +676,10 @@ chatForm.addEventListener('submit', (e) => {
         const counter = document.querySelector('.char-counter span');
         if (counter) counter.textContent = '0';
         
-        // Iniciar cooldown
-        startCooldown();
+        // Verificar si se debe activar el cooldown
+        if (shouldActivateCooldown()) {
+            startCooldown();
+        }
     }
 });
 
@@ -837,8 +917,10 @@ function handleMediaUpload(file) {
         processMediaUploadQueue();
     }
     
-    // Iniciar cooldown
-    startCooldown();
+    // Verificar si se debe activar el cooldown
+    if (shouldActivateCooldown()) {
+        startCooldown();
+    }
 }
 
 // Función interna que realmente procesa el archivo
@@ -1233,8 +1315,8 @@ function outputMessage(message, doScroll = true) {
     const div = document.createElement('div');
     div.classList.add('message', 'fade-in');
     
-    // Añadir clase 'self' si el mensaje es del usuario actual
-    if (message.userId === socket.id) {
+    // Comprobar si el mensaje es del usuario actual
+    if (message.userId === socket.id || message.username === localUsername) {
         div.classList.add('self');
     }
     
@@ -1244,6 +1326,18 @@ function outputMessage(message, doScroll = true) {
             <p class="text-content">${message.text}</p>
         </div>
     `;
+    
+    // Solo borrar mensajes temporales del mismo usuario si es nuestro mensaje
+    if (message.username === localUsername) {
+        const pendingMessages = document.querySelectorAll('.message.pending');
+        pendingMessages.forEach(pending => {
+            const pendingText = pending.querySelector('.text-content').textContent;
+            if (pendingText === message.text) {
+                pending.remove();
+            }
+        });
+    }
+    
     document.querySelector('.chat-messages').appendChild(div);
     
     // Activar animación de entrada
@@ -1251,7 +1345,6 @@ function outputMessage(message, doScroll = true) {
         div.classList.add('active');
     }, 10);
     
-    // Solo hacer scroll si se solicita (para cargas iniciales diferimos el scroll)
     if (doScroll) {
         scrollToBottom();
     }
@@ -1610,3 +1703,26 @@ if (logoutBtn) {
         logout();
     });
 }
+
+// Modificar el servidor para añadir callback en chatMessage
+// En server.js, modificar el evento 'chatMessage' para incluir callback
+// Agregar estilo para mensajes pendientes y confirmados
+document.head.insertAdjacentHTML('beforeend', `
+<style>
+    .message.pending {
+        opacity: 0.7;
+    }
+    .message.pending .status-indicator {
+        display: inline-block;
+        margin-left: 10px;
+        font-size: 12px;
+        color: var(--warning-color);
+    }
+    .message.confirmed .status-indicator {
+        color: var(--success-color);
+    }
+    .message.error .status-indicator {
+        color: var(--danger-color);
+    }
+</style>
+`);

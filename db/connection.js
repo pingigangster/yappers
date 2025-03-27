@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // Configuración de la conexión a MongoDB
-const MONGO_URI = 'mongodb://admin:patata123@pingadominga.es:27017/chatapp?authSource=admin';
+const MONGO_URI = 'mongodb://admin:patata123@localhost:27017/chatapp?authSource=admin';
 
 // Opciones de conexión mejoradas para archivos grandes
 const options = {

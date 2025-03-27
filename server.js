@@ -689,7 +689,7 @@ app.get('/api/diagnose', async (req, res) => {
                 platform: process.platform
             },
             database: {
-                connectionString: process.env.MONGODB_URI || 'mongodb://pingadominga.es:27017/chatapp',
+                connectionString: process.env.MONGODB_URI || 'mongodb://admin:patata123@localhost:27017/chatapp?authSource=admin',
                 status: 'checking...'
             }
         };
@@ -916,7 +916,7 @@ io.on('connection', async (socket) => {
     });
 
     // Escuchar chatMessage (mensaje de texto)
-    socket.on('chatMessage', async msg => {
+    socket.on('chatMessage', async (msg, callback) => {
         try {
             // Obtener usuario por socketId
             const users = await userController.getConnectedUsers();
@@ -938,9 +938,30 @@ io.on('connection', async (socket) => {
                     text: validatedMsg,
                     time: moment(savedMessage.createdAt).format('HH:mm')
                 });
+                
+                // Enviar confirmación al remitente a través del callback
+                if (callback && typeof callback === 'function') {
+                    callback({ 
+                        success: true,
+                        messageId: savedMessage._id
+                    });
+                }
+            } else {
+                if (callback && typeof callback === 'function') {
+                    callback({ 
+                        success: false, 
+                        error: 'Usuario no encontrado'
+                    });
+                }
             }
         } catch (error) {
             console.error('Error al procesar mensaje de texto:', error);
+            if (callback && typeof callback === 'function') {
+                callback({ 
+                    success: false, 
+                    error: error.message || 'Error al guardar mensaje'
+                });
+            }
         }
     });
 
