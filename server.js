@@ -383,11 +383,47 @@ app.get('/api/files/:id', async (req, res) => {
                 'Access-Control-Expose-Headers': 'Content-Range, Content-Length'
             });
             
+            // Configurar manejo de eventos para el stream
+            let streamClosed = false;
+            
+            // Cuando la respuesta se complete
+            res.on('finish', () => {
+                console.log(`Streaming completado: ${fileId} (rango ${file.range.start}-${file.range.end})`);
+                streamClosed = true;
+            });
+            
+            // Cuando el cliente cierra la conexión
+            res.on('close', () => {
+                if (!streamClosed) {
+                    console.log(`Streaming interrumpido: ${fileId} (rango ${file.range.start}-${file.range.end})`);
+                }
+            });
+            
+            // Manejar errores del stream
+            file.stream.on('error', (err) => {
+                console.error(`Error en stream de rango: ${fileId}`, err);
+                if (!res.headersSent) {
+                    res.status(500).json({ 
+                        success: false, 
+                        message: 'Error al procesar archivo para streaming' 
+                    });
+                }
+            });
+            
             // Enviar el stream parcial como respuesta
             file.stream.pipe(res);
         } else {
             // Streaming normal para descargas completas
             const file = await messageController.getFileById(fileId);
+            
+            // Detectar si es un video u otro tipo de archivo
+            const isVideo = file.file.contentType && file.file.contentType.startsWith('video/');
+            const isViewable = /^(image|video|audio)\//.test(file.file.contentType);
+            
+            // Sanitizar el nombre del archivo para el header Content-Disposition
+            let filename = file.file.filename || 'archivo';
+            // Eliminar caracteres problemáticos y codificar
+            filename = filename.replace(/[^\w.-]/g, '_');
             
             // Configurar headers de respuesta
             const headers = {
@@ -398,16 +434,47 @@ app.get('/api/files/:id', async (req, res) => {
                 'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition'
             };
             
-            // Añadir header para descarga si no es un tipo de archivo que se reproduce en navegador
-            const isViewable = /^(image|video|audio)\//.test(file.file.contentType);
-            if (!isViewable) {
-                headers['Content-Disposition'] = `attachment; filename="${file.file.filename}"`;
+            // Dependiendo del tipo, configurar para visualización o descarga
+            if (isViewable) {
+                headers['Content-Disposition'] = `inline; filename="${filename}"`;
             } else {
-                headers['Content-Disposition'] = `inline; filename="${file.file.filename}"`;
+                headers['Content-Disposition'] = `attachment; filename="${filename}"`;
+            }
+            
+            // Para videos, usar encabezados adicionales que ayuden con el streaming
+            if (isVideo) {
+                headers['X-Content-Type-Options'] = 'nosniff';
             }
             
             // Establecer todos los headers
             res.set(headers);
+            
+            // Configurar manejo de eventos para el stream
+            let streamClosed = false;
+            
+            // Cuando la respuesta se complete
+            res.on('finish', () => {
+                console.log(`Visualización completada: ${fileId}`);
+                streamClosed = true;
+            });
+            
+            // Cuando el cliente cierra la conexión
+            res.on('close', () => {
+                if (!streamClosed) {
+                    console.log(`Visualización interrumpida: ${fileId}`);
+                }
+            });
+            
+            // Manejar errores del stream
+            file.stream.on('error', (err) => {
+                console.error(`Error en stream completo: ${fileId}`, err);
+                if (!res.headersSent) {
+                    res.status(500).json({ 
+                        success: false, 
+                        message: 'Error al procesar archivo para visualización' 
+                    });
+                }
+            });
             
             // Enviar el stream como respuesta
             file.stream.pipe(res);
@@ -1371,15 +1438,68 @@ app.get('/api/download/:id', async (req, res) => {
         const fileId = req.params.id;
         const file = await messageController.getFileById(fileId);
         
-        // Configurar headers para forzar descarga
-        res.set({
-            'Content-Type': 'application/octet-stream',
-            'Content-Disposition': `attachment; filename="${file.file.filename}"`,
-            'Content-Length': file.file.length,
-            'Accept-Ranges': 'bytes',
-            'X-Content-Type-Options': 'nosniff',
-            'Cache-Control': 'private, max-age=3600', // Cache por 1 hora para el cliente
-            'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition' // Exponer estos headers para XHR
+        // Detectar si es un video
+        const isVideo = file.file.contentType && file.file.contentType.startsWith('video/');
+        
+        // Sanitizar el nombre del archivo para el header Content-Disposition
+        let filename = file.file.filename || 'archivo';
+        // Eliminar caracteres problemáticos y codificar
+        filename = filename.replace(/[^\w.-]/g, '_');
+        
+        // Configurar headers adecuados según el tipo de archivo
+        if (isVideo) {
+            res.set({
+                'Content-Type': file.file.contentType,
+                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Content-Length': file.file.length,
+                'Accept-Ranges': 'bytes',
+                'X-Content-Type-Options': 'nosniff',
+                'Cache-Control': 'private, max-age=3600', // Cache por 1 hora para el cliente
+                'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition' // Exponer estos headers para XHR
+            });
+        } else {
+            // Para otros tipos de archivo, usar application/octet-stream
+            res.set({
+                'Content-Type': 'application/octet-stream',
+                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Content-Length': file.file.length,
+                'Accept-Ranges': 'bytes',
+                'X-Content-Type-Options': 'nosniff',
+                'Cache-Control': 'private, max-age=3600',
+                'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition'
+            });
+        }
+        
+        // Manejar eventos de finalización y error para asegurar limpieza adecuada
+        let streamClosed = false;
+        
+        // Cuando la respuesta se complete
+        res.on('finish', () => {
+            console.log(`Descarga completada: ${fileId}`);
+            streamClosed = true;
+            
+            // No es necesario cerrar el stream explícitamente, 
+            // pipe() se encarga de esto cuando la respuesta finaliza
+        });
+        
+        // Cuando la respuesta se cierra (cliente desconecta)
+        res.on('close', () => {
+            if (!streamClosed) {
+                console.log(`Descarga interrumpida: ${fileId}`);
+                // El stream se cierra automáticamente cuando pipe() detecta que el destino se ha cerrado
+            }
+        });
+        
+        // Manejar error del stream
+        file.stream.on('error', (err) => {
+            console.error(`Error en stream de descarga: ${fileId}`, err);
+            // Solo enviar respuesta de error si aún no se ha enviado la cabecera
+            if (!res.headersSent) {
+                res.status(500).json({ 
+                    success: false, 
+                    message: 'Error al procesar archivo para descarga' 
+                });
+            }
         });
         
         // Enviar el stream como respuesta para descarga

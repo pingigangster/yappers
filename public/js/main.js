@@ -1321,7 +1321,10 @@ function outputMessage(message, doScroll = true) {
     }
     
     div.innerHTML = `
-        <p class="meta">${message.username} <span>${message.time}</span></p>
+        <div class="message-header">
+            <p class="meta">${message.username} <span>${message.time}</span></p>
+            <div class="download-btn-container"></div>
+        </div>
         <div class="content">
             <p class="text-content">${message.text}</p>
         </div>
@@ -1356,29 +1359,32 @@ function outputMediaMessage(message, doScroll = true) {
     div.classList.add('message', 'fade-in');
     
     // Determinar si el mensaje es propio
-    if (message.username === localUsername) {
+    const isSelf = message.username === localUsername;
+    if (isSelf) {
         div.classList.add('self');
     }
     
     // Crear el contenido multimedia en función del tipo
     let mediaContent = '';
     
+    // Preparar datos del botón de descarga
+    const getDownloadButton = (url, fileName, title, isVideo = false, mediaId = '') => {
+        return `<a href="${url}" class="download-btn" download="${fileName || 'archivo'}" 
+                 title="${title}" ${isVideo ? `data-is-video="true" data-media-id="${mediaId}"` : ''}>
+                <i class="fas fa-cloud-download-alt"></i>
+               </a>`;
+    };
+    
     if (message.fileType === 'image') {
         mediaContent = `
             <div class="image-container">
                 <img src="${message.media}" alt="Imagen compartida" class="media-content">
-                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar imagen">
-                    <i class="fas fa-download"></i>
-                </a>
             </div>
         `;
     } else if (message.fileType === 'gif') {
         mediaContent = `
             <div class="image-container">
                 <img src="${message.media}" alt="GIF compartido" class="media-content">
-                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar GIF">
-                    <i class="fas fa-download"></i>
-                </a>
             </div>
         `;
     } else if (message.fileType === 'video') {
@@ -1394,18 +1400,12 @@ function outputMediaMessage(message, doScroll = true) {
                         <i class="fas fa-play"></i>
                     </div>
                 </div>
-                <a href="${message.media}" class="download-btn" download="${message.fileName || 'video'}" title="Descargar video">
-                    <i class="fas fa-download"></i>
-                </a>
             </div>
         `;
     } else if (message.fileType === 'audio') {
         mediaContent = `
             <div class="audio-container">
                 <audio controls src="${message.media}"></audio>
-                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar audio">
-                    <i class="fas fa-download"></i>
-                </a>
             </div>
         `;
     } else {
@@ -1435,15 +1435,36 @@ function outputMediaMessage(message, doScroll = true) {
                         <span class="file-size">${fileSize}</span>
                     </div>
                 </div>
-                <a href="${message.media}" class="download-btn" download="${message.fileName}" title="Descargar archivo">
-                    <i class="fas fa-download"></i>
-                </a>
             </div>
         `;
     }
     
+    // Usar URL especial para descargas de video
+    const downloadUrl = message.fileType === 'video' && message.mediaId ? 
+                        `/api/download/${message.mediaId}` : message.media;
+    
+    // Botón de descarga con título según el tipo de archivo
+    const downloadTitle = `Descargar ${message.fileType === 'image' ? 'imagen' : 
+                          message.fileType === 'gif' ? 'GIF' : 
+                          message.fileType === 'video' ? 'video' : 
+                          message.fileType === 'audio' ? 'audio' : 'archivo'}`;
+    
+    // Construir el botón de descarga
+    const downloadButton = getDownloadButton(
+        downloadUrl, 
+        message.fileName, 
+        downloadTitle, 
+        message.fileType === 'video', 
+        message.mediaId || ''
+    );
+    
     div.innerHTML = `
-        <p class="meta">${message.username} <span>${message.time}</span></p>
+        <div class="message-header">
+            <p class="meta">${message.username} <span>${message.time}</span></p>
+            <div class="download-btn-container">
+                ${downloadButton}
+            </div>
+        </div>
         <div class="content">
             ${message.text ? `<p class="text-content">${message.text}</p>` : ''}
             <div class="media-container">
@@ -1508,6 +1529,8 @@ function setupDownloadHandlers() {
         if (e.target.closest('.download-btn') || e.target.closest('.external-download-btn')) {
             const downloadLink = e.target.closest('.download-btn') || e.target.closest('.external-download-btn');
             const downloadUrl = downloadLink.getAttribute('href');
+            const isVideo = downloadLink.getAttribute('data-is-video') === 'true';
+            const mediaId = downloadLink.getAttribute('data-media-id');
             
             // Verificar si es una descarga de archivo grande desde GridFS
             if (downloadUrl && (downloadUrl.startsWith('/api/download/') || downloadUrl.startsWith('/api/files/'))) {
@@ -1531,10 +1554,13 @@ function setupDownloadHandlers() {
                             <div class="download-status">Iniciando descarga...</div>
                         `;
                         
-                        // Encontrar el contenedor de archivo para insertar el indicador
-                        const fileContainer = messageElement.querySelector('.file-container');
-                        if (fileContainer) {
-                            fileContainer.appendChild(downloadIndicator);
+                        // Encontrar el contenedor para insertar el indicador
+                        const container = isVideo ? 
+                            messageElement.querySelector('.video-container') : 
+                            messageElement.querySelector('.file-container, .audio-container');
+                            
+                        if (container) {
+                            container.appendChild(downloadIndicator);
                         }
                     }
                     
@@ -1544,9 +1570,14 @@ function setupDownloadHandlers() {
                     // Cambiar estilo del botón
                     downloadLink.classList.add('downloading');
                     
+                    // Determinar la URL adecuada para la descarga
+                    // Para videos, usar la ruta de descarga especial para evitar problemas de streaming
+                    const effectiveUrl = isVideo && mediaId ? 
+                        `/api/download/${mediaId}` : downloadUrl;
+                    
                     // Iniciar descarga con XMLHttpRequest para poder mostrar el progreso
                     const xhr = new XMLHttpRequest();
-                    xhr.open('GET', downloadUrl, true);
+                    xhr.open('GET', effectiveUrl, true);
                     xhr.responseType = 'blob';
                     
                     // Inicializar progreso

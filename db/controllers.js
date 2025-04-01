@@ -667,7 +667,10 @@ const messageController = {
                     return reject(new Error('Archivo no encontrado'));
                 }
                 
-                // Si hay un range (para streaming de video), procesar adecuadamente
+                // Verificar si es un video para manejos especiales
+                const isVideo = file.contentType && file.contentType.startsWith('video/');
+                
+                // Si hay un header de Range, manejarlo para streaming de video
                 if (range) {
                     // Obtener información del rango solicitado
                     const parts = range.replace(/bytes=/, "").split("-");
@@ -682,9 +685,15 @@ const messageController = {
                             end: end + 1
                         });
                         
+                        // Manejar posibles errores en el stream
                         readStream.on('error', err => {
                             console.error('Error en stream de rango:', err);
                             reject(err);
+                        });
+                        
+                        // Manejar fin del stream (opcional, para registro)
+                        readStream.on('end', () => {
+                            console.log(`Stream de rango completado para ${fileId}, bytes ${start}-${end}`);
                         });
                         
                         resolve({
@@ -695,7 +704,8 @@ const messageController = {
                                 end,
                                 length: file.length,
                                 chunkSize
-                            }
+                            },
+                            isVideo
                         });
                     } catch (streamError) {
                         console.error('Error al crear stream de rango:', streamError);
@@ -706,14 +716,21 @@ const messageController = {
                     try {
                         const readStream = gridFSBucket.openDownloadStream(_id);
                         
+                        // Manejar posibles errores en el stream
                         readStream.on('error', err => {
                             console.error('Error en stream normal:', err);
                             reject(err);
                         });
                         
+                        // Manejar fin del stream (opcional, para registro)
+                        readStream.on('end', () => {
+                            console.log(`Stream completo finalizado para ${fileId}`);
+                        });
+                        
                         resolve({
                             file,
-                            stream: readStream
+                            stream: readStream,
+                            isVideo
                         });
                     } catch (streamError) {
                         console.error('Error al crear stream normal:', streamError);
