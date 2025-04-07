@@ -14,12 +14,10 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true,
-        unique: true
     },
     email: {
         type: String,
         required: true,
-        unique: true,
         trim: true,
         lowercase: true,
         match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Por favor ingresa un email válido']
@@ -95,9 +93,9 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 // Creación de índices para mejorar rendimiento
-UserSchema.index({ username: 1 });
-UserSchema.index({ email: 1 });
+UserSchema.index({ username: 1 }, { unique: true });
+UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ socketId: 1 });
-UserSchema.index({ uuid: 1 });
+UserSchema.index({ uuid: 1 }, { unique: true });
 
 module.exports = mongoose.model('User', UserSchema); 

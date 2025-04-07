@@ -5,8 +5,6 @@ const MONGO_URI = 'mongodb://admin:patata123@localhost:27017/chatapp?authSource=
 
 // Opciones de conexión mejoradas para archivos grandes
 const options = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     autoIndex: true,
     serverSelectionTimeoutMS: 10000, // Aumentado a 10 segundos
     socketTimeoutMS: 90000, // Aumentado a 90 segundos para transferencias grandes
@@ -29,17 +27,6 @@ const connectDB = async () => {
         console.log('Conectando a MongoDB...');
         const conn = await mongoose.connect(MONGO_URI, options);
         console.log(`MongoDB conectado: ${conn.connection.host}`);
-        
-        // Configurar el tamaño máximo de documento a 50MB para permitir archivos más grandes
-        try {
-            await mongoose.connection.db.admin().command({ 
-                setParameter: 1, 
-                maxBSONObjectSize: 52428800 // 50MB
-            });
-            console.log('Tamaño máximo de documento configurado a 50MB');
-        } catch (adminErr) {
-            console.log('No se pudo aumentar el tamaño máximo de documento, usando valor por defecto:', adminErr.message);
-        }
         
         return conn;
     } catch (error) {

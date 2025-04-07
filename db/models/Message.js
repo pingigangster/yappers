@@ -6,7 +6,6 @@ const MessageSchema = new mongoose.Schema({
     uuid: {
         type: String,
         default: uuidv4,
-        unique: true,
         required: true
     },
     text: {
@@ -68,7 +67,7 @@ const MessageSchema = new mongoose.Schema({
 // Índices para mejorar rendimiento de consultas
 MessageSchema.index({ createdAt: -1 });
 MessageSchema.index({ userId: 1 });
-MessageSchema.index({ uuid: 1 });
+MessageSchema.index({ uuid: 1 }, { unique: true });
 
 // Método para obtener los mensajes más recientes
 MessageSchema.statics.getRecentMessages = async function(limit = 50) {
