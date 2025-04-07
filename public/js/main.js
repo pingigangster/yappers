@@ -1,5 +1,5 @@
 const chatForm = document.getElementById('chat-form');
-const chatMessages = document.getElementById('chat-messages');
+const chatMessages = document.querySelector('.chat-messages');
 const usernameDisplay = document.getElementById('username-display');
 const usersList = document.getElementById('users');
 const mediaUpload = document.getElementById('media-upload');
@@ -457,6 +457,39 @@ socket.on('historicalMessages', messages => {
         updateLoadingProgress(80, 'No hay mensajes previos.');
         messagesLoaded = true;
         checkAllLoaded();
+    }
+});
+
+// Escuchar evento de eliminación de mensajes (desde el panel de administrador)
+socket.on('messagesDeleted', data => {
+    console.log('📢 Evento messagesDeleted recibido:', data);
+    
+    if (data.type === 'all') {
+        console.log('🔄 Recargando página debido a eliminación de mensajes...');
+        
+        // Mostrar una breve notificación antes de recargar
+        const notificacion = document.createElement('div');
+        notificacion.style.position = 'fixed';
+        notificacion.style.top = '50%';
+        notificacion.style.left = '50%';
+        notificacion.style.transform = 'translate(-50%, -50%)';
+        notificacion.style.background = 'rgba(0, 0, 0, 0.8)';
+        notificacion.style.color = 'white';
+        notificacion.style.padding = '20px';
+        notificacion.style.borderRadius = '5px';
+        notificacion.style.zIndex = '9999';
+        notificacion.style.textAlign = 'center';
+        notificacion.innerHTML = `
+            <p style="margin: 0; font-size: 18px;">Los mensajes han sido eliminados por el administrador</p>
+            <p style="margin: 10px 0 0 0; font-size: 14px;">Recargando la página...</p>
+        `;
+        document.body.appendChild(notificacion);
+        
+        // Forzar la recarga de la página después de un breve retraso
+        setTimeout(() => {
+            console.log('🔁 Forzando recarga de página...');
+            window.location.href = window.location.href;
+        }, 1000);
     }
 });
 
@@ -1011,6 +1044,8 @@ function handleMediaUploadInternal(file, text) {
             setTimeout(() => {
                 tempDiv.remove();
             }, 1000);
+            
+            showTransferNotification(`Archivo "${file.name}" subido correctamente`, 'success');
         }
         
         // Basado en el tamaño del archivo, elegir entre carga estándar o fragmentada
@@ -1117,58 +1152,73 @@ function handleMediaUploadInternal(file, text) {
         
         // Función para cargar archivos grandes en fragmentos
         function uploadLargeFile() {
-            const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB por fragmento
+            // Aumentado de 2MB a 4MB para mejor rendimiento
+            const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB por fragmento
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
             let currentChunk = 0;
             let fileId = null;
+            let activeUploads = 0;
+            const MAX_PARALLEL_UPLOADS = 3; // Máximo de cargas paralelas
+            const uploadedChunks = new Set(); // Seguimiento de chunks subidos
             
             console.log(`Preparando carga fragmentada: ${totalChunks} fragmentos de ${formatFileSize(CHUNK_SIZE)}`);
-            updateProgress(10, `Preparando carga fragmentada (${totalChunks} fragmentos)...`);
+            updateProgress(10, `Preparando carga optimizada (${totalChunks} fragmentos)...`);
             
-            // Función para subir un fragmento a la vez
-            function uploadNextChunk() {
+            // Función para subir un fragmento específico
+            function uploadChunk(chunkIndex) {
+                // Si este chunk ya se subió o excede el total, no hacer nada
+                if (uploadedChunks.has(chunkIndex) || chunkIndex >= totalChunks) {
+                    return;
+                }
+                
+                // Marcar este chunk como en proceso
+                activeUploads++;
+                
                 // Calcular el progreso general
-                const overallProgress = Math.round(((currentChunk + 0.5) / totalChunks) * 90) + 10; // 10-100%
+                const processedChunks = uploadedChunks.size;
+                const overallProgress = Math.round(((processedChunks + (activeUploads * 0.5)) / totalChunks) * 90) + 10; // 10-100%
                 updateProgress(
                     overallProgress,
-                    `Subiendo fragmento ${currentChunk + 1} de ${totalChunks}...`
+                    `Subiendo ${activeUploads} fragmentos en paralelo (${processedChunks}/${totalChunks} completados)...`
                 );
                 
                 // Cortar el fragmento del archivo
-                const start = currentChunk * CHUNK_SIZE;
+                const start = chunkIndex * CHUNK_SIZE;
                 const end = Math.min(file.size, start + CHUNK_SIZE);
                 const chunk = file.slice(start, end);
                 
-                console.log(`Procesando fragmento ${currentChunk + 1}/${totalChunks}, tamaño: ${formatFileSize(chunk.size)}`);
+                console.log(`Procesando fragmento ${chunkIndex + 1}/${totalChunks}, tamaño: ${formatFileSize(chunk.size)}`);
                 
                 // Leer el fragmento
                 const reader = new FileReader();
                 
                 reader.onload = function(e) {
-                    console.log(`Fragmento ${currentChunk + 1} leído, enviando al servidor`);
+                    console.log(`Fragmento ${chunkIndex + 1} leído, enviando al servidor`);
                     
                     // Datos para enviar este fragmento
                     const chunkData = {
                         fileName: file.name,
                         fileType: fileType,
                         fileSize: file.size,
-                        text: currentChunk === 0 ? text : '', // Texto solo con el primer fragmento
+                        text: chunkIndex === 0 ? text : '', // Texto solo con el primer fragmento
                         chunkData: e.target.result,
-                        currentChunk: currentChunk,
+                        currentChunk: chunkIndex,
                         totalChunks: totalChunks,
-                        isLastChunk: currentChunk === totalChunks - 1,
+                        isLastChunk: chunkIndex === totalChunks - 1,
                         fileId: fileId // null para el primer fragmento
                     };
                     
                     // Set timeout para detectar problemas del servidor
                     const chunkTimeout = setTimeout(() => {
-                        handleUploadError(`No se recibió respuesta del servidor para el fragmento ${currentChunk + 1}`);
+                        activeUploads--;
+                        handleUploadError(`No se recibió respuesta del servidor para el fragmento ${chunkIndex + 1}`);
                     }, 60000);
                     
                     // Enviar el fragmento
                     socket.emit('chunkUpload', chunkData, (response) => {
-                        console.log(`Respuesta del servidor para fragmento ${currentChunk + 1}:`, response);
+                        console.log(`Respuesta del servidor para fragmento ${chunkIndex + 1}:`, response);
                         clearTimeout(chunkTimeout);
+                        activeUploads--;
                         
                         if (response && response.success) {
                             // Guardar el ID del archivo del primer fragmento
@@ -1177,41 +1227,75 @@ function handleMediaUploadInternal(file, text) {
                                 console.log('ID de archivo asignado:', fileId);
                             }
                             
-                            // Avanzar al siguiente fragmento
-                            currentChunk++;
+                            // Marcar este chunk como completado
+                            uploadedChunks.add(chunkIndex);
                             
-                            if (currentChunk < totalChunks) {
-                                // Continuar con el siguiente fragmento
-                                uploadNextChunk();
-                            } else {
+                            // Actualizar la UI con el progreso
+                            const processedChunks = uploadedChunks.size;
+                            const newProgress = Math.round((processedChunks / totalChunks) * 90) + 10;
+                            updateProgress(
+                                newProgress,
+                                `Progreso: ${processedChunks}/${totalChunks} fragmentos (${Math.round((processedChunks/totalChunks)*100)}%)`
+                            );
+                            
+                            if (processedChunks === totalChunks) {
                                 // Todos los fragmentos enviados
                                 console.log('Todos los fragmentos enviados correctamente');
                                 updateProgress(100, '¡Archivo subido con éxito!');
                                 completeUpload();
+                            } else {
+                                // Continuar con más fragmentos si hay capacidad
+                                processUploadQueue();
                             }
                         } else {
                             console.error('Error en la respuesta del servidor:', response);
-                            handleUploadError(response?.error || `Error al subir fragmento ${currentChunk + 1}`);
+                            
+                            // Reintentar este fragmento hasta 3 veces
+                            if (!chunkData.retryCount || chunkData.retryCount < 3) {
+                                console.log(`Reintentando subida del fragmento ${chunkIndex + 1} (intento ${(chunkData.retryCount || 0) + 1}/3)`);
+                                chunkData.retryCount = (chunkData.retryCount || 0) + 1;
+                                
+                                // Esperar un poco antes de reintentar
+                                setTimeout(() => {
+                                    uploadChunk(chunkIndex);
+                                }, 1000);
+                            } else {
+                                handleUploadError(response?.error || `Error al subir fragmento ${chunkIndex + 1} después de varios intentos`);
+                            }
                         }
                     });
                 };
                 
                 reader.onerror = function(error) {
-                    console.error(`Error al leer fragmento ${currentChunk + 1}:`, error);
-                    handleUploadError(`Error al leer fragmento ${currentChunk + 1}`);
+                    console.error(`Error al leer fragmento ${chunkIndex + 1}:`, error);
+                    activeUploads--;
+                    handleUploadError(`Error al leer fragmento ${chunkIndex + 1}`);
                 };
                 
                 // Leer el fragmento como data URL
                 try {
                     reader.readAsDataURL(chunk);
                 } catch (error) {
-                    console.error(`Error al iniciar lectura del fragmento ${currentChunk + 1}:`, error);
-                    handleUploadError(`Error al iniciar lectura del fragmento ${currentChunk + 1}`);
+                    console.error(`Error al iniciar lectura del fragmento ${chunkIndex + 1}:`, error);
+                    activeUploads--;
+                    handleUploadError(`Error al iniciar lectura del fragmento ${chunkIndex + 1}`);
                 }
             }
             
-            // Iniciar el proceso de carga fragmentada
-            uploadNextChunk();
+            // Función para procesar la cola de subida y mantener múltiples subidas activas
+            function processUploadQueue() {
+                // Iniciar nuevas cargas hasta alcanzar el máximo de cargas paralelas
+                while (activeUploads < MAX_PARALLEL_UPLOADS && currentChunk < totalChunks) {
+                    // Verificar si este chunk ya está subido
+                    if (!uploadedChunks.has(currentChunk)) {
+                        uploadChunk(currentChunk);
+                    }
+                    currentChunk++;
+                }
+            }
+            
+            // Iniciar el proceso de carga fragmentada paralela
+            processUploadQueue();
         }
     } catch (generalError) {
         console.error('Error general en handleMediaUpload:', generalError);
@@ -1322,7 +1406,7 @@ function outputMessage(message, doScroll = true) {
     
     div.innerHTML = `
         <div class="message-header">
-            <p class="meta">${message.username} <span>${message.time}</span></p>
+        <p class="meta">${message.username} <span>${message.time}</span></p>
             <div class="download-btn-container"></div>
         </div>
         <div class="content">
@@ -1376,38 +1460,38 @@ function outputMediaMessage(message, doScroll = true) {
     };
     
     if (message.fileType === 'image') {
-        mediaContent = `
+            mediaContent = `
             <div class="image-container">
                 <img src="${message.media}" alt="Imagen compartida" class="media-content">
-            </div>
-        `;
+                </div>
+            `;
     } else if (message.fileType === 'gif') {
-        mediaContent = `
+            mediaContent = `
             <div class="image-container">
                 <img src="${message.media}" alt="GIF compartido" class="media-content">
-            </div>
-        `;
+                </div>
+            `;
     } else if (message.fileType === 'video') {
         // Siempre tratar los videos como archivos almacenados en GridFS
         // independientemente de su tamaño
         const videoSrc = message.media;
         
-        mediaContent = `
+            mediaContent = `
             <div class="video-container">
-                <div class="video-wrapper">
+                    <div class="video-wrapper">
                     <video src="${videoSrc}" class="media-content" preload="metadata" controls></video>
                     <div class="video-play-icon">
                         <i class="fas fa-play"></i>
                     </div>
                 </div>
-            </div>
-        `;
+                </div>
+            `;
     } else if (message.fileType === 'audio') {
-        mediaContent = `
+            mediaContent = `
             <div class="audio-container">
                 <audio controls src="${message.media}"></audio>
-            </div>
-        `;
+                </div>
+            `;
     } else {
         // Archivos genéricos (PDF, DOC, etc.)
         let fileIcon = 'fa-file';
@@ -1426,17 +1510,17 @@ function outputMediaMessage(message, doScroll = true) {
         const fileSize = message.fileSize ? formatFileSize(message.fileSize) : 'Desconocido';
         
         // Crear contenedor de archivo
-        mediaContent = `
+            mediaContent = `
             <div class="file-container">
-                <div class="file-info">
-                    <i class="fas ${fileIcon} file-icon"></i>
-                    <div class="file-details">
+                        <div class="file-info">
+                            <i class="fas ${fileIcon} file-icon"></i>
+                            <div class="file-details">
                         <span class="file-name">${message.fileName || 'Archivo'}</span>
                         <span class="file-size">${fileSize}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
     }
     
     // Usar URL especial para descargas de video
@@ -1551,7 +1635,7 @@ function setupDownloadHandlers() {
                             <div class="download-progress">
                                 <div class="download-progress-bar" style="width: 0%"></div>
                             </div>
-                            <div class="download-status">Iniciando descarga...</div>
+                            <div class="download-status">Iniciando descarga optimizada...</div>
                         `;
                         
                         // Encontrar el contenedor para insertar el indicador
@@ -1573,53 +1657,83 @@ function setupDownloadHandlers() {
                     // Determinar la URL adecuada para la descarga
                     // Para videos, usar la ruta de descarga especial para evitar problemas de streaming
                     const effectiveUrl = isVideo && mediaId ? 
-                        `/api/download/${mediaId}` : downloadUrl;
+                        `/api/download/${mediaId}?optimized=true` : 
+                        `${downloadUrl}?optimized=true`;
                     
-                    // Iniciar descarga con XMLHttpRequest para poder mostrar el progreso
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('GET', effectiveUrl, true);
-                    xhr.responseType = 'blob';
+                    // Iniciar descarga con Fetch API para mejor rendimiento y soporte de streaming
+                    statusText.textContent = 'Iniciando descarga optimizada...';
+                    progressBar.style.width = '5%';
                     
-                    // Inicializar progreso
-                    progressBar.style.width = '0%';
-                    statusText.textContent = 'Preparando descarga...';
-                    
-                    // Mostrar progreso de carga, aun si no hay progreso real
-                    let fakeProgress = 0;
-                    const progressInterval = setInterval(() => {
-                        if (fakeProgress < 90) {
-                            fakeProgress += 5;
-                            progressBar.style.width = fakeProgress + '%';
-                            statusText.textContent = `Descargando... ${fakeProgress}%`;
+                    fetch(effectiveUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': '*/*'
                         }
-                    }, 500);
-                    
-                    // Actualizar progreso durante la descarga
-                    xhr.onprogress = function(event) {
-                        // Detener el intervalo de progreso falso
-                        clearInterval(progressInterval);
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`Error HTTP: ${response.status}`);
+                        }
                         
-                        if (event.lengthComputable) {
-                            const percentComplete = Math.round((event.loaded / event.total) * 100);
-                            progressBar.style.width = percentComplete + '%';
-                            statusText.textContent = `Descargando... ${percentComplete}%`;
-                            console.log('Progreso de descarga:', percentComplete + '%', event.loaded, 'de', event.total, 'bytes');
+                        // Obtener el tamaño total del archivo
+                        const contentLength = response.headers.get('Content-Length');
+                        const totalSize = contentLength ? parseInt(contentLength, 10) : 0;
+                        const fileName = getFileNameFromResponse(response) || 
+                                        downloadLink.getAttribute('download') || 
+                                        'archivo_descargado';
+                        
+                        // Actualizar interfaz
+                        progressBar.style.width = '10%';
+                        statusText.textContent = `Descargando ${fileName}...`;
+                        
+                        // Crear un lector de la respuesta para manejar streaming
+                        const reader = response.body.getReader();
+                        let receivedLength = 0;
+                        const chunks = [];
+                        
+                        // Función para procesar los chunks a medida que llegan
+                        return new Promise((resolve, reject) => {
+                            function processChunk({ done, value }) {
+                                if (done) {
+                                    return resolve(new Blob(chunks));
+                                }
+                                
+                                // Agregar el fragmento recibido al array
+                                chunks.push(value);
+                                receivedLength += value.length;
+                                
+                                // Calcular y mostrar el progreso
+                                let percent = totalSize ? 
+                                    Math.min(90, 10 + Math.round((receivedLength / totalSize) * 80)) : 
+                                    // Si no sabemos el tamaño total, mostrar un progreso continuo
+                                    Math.min(90, 10 + Math.round((chunks.length % 10) * 8));
+                                
+                                progressBar.style.width = `${percent}%`;
+                                
+                                if (totalSize) {
+                                    const formattedReceived = formatFileSize(receivedLength);
+                                    const formattedTotal = formatFileSize(totalSize);
+                                    statusText.textContent = `Descargando ${formattedReceived} de ${formattedTotal} (${percent}%)`;
                         } else {
-                            // Si no podemos calcular el progreso, mostrar mensaje genérico
-                            progressBar.style.width = '50%';
-                            statusText.textContent = `Descargando... (tamaño desconocido)`;
-                            console.log('Progreso de descarga no disponible, bytes descargados:', event.loaded);
-                        }
-                    };
-                    
-                    // Cuando la descarga se completa
-                    xhr.onload = function() {
-                        // Detener el intervalo de progreso falso
-                        clearInterval(progressInterval);
+                                    statusText.textContent = `Descargando ${formatFileSize(receivedLength)}...`;
+                                }
+                                
+                                // Continuar leyendo
+                                return reader.read().then(processChunk);
+                            }
+                            
+                            // Iniciar la lectura
+                            reader.read().then(processChunk).catch(reject);
+                        });
+                    })
+                    .then(blob => {
+                        // Descarga completada, actualizar UI
+                        progressBar.style.width = '100%';
+                        statusText.textContent = '¡Descarga completada! Guardando archivo...';
                         
-                        if (xhr.status === 200) {
-                            // Descargar el archivo usando el objeto URL
-                            const blob = xhr.response;
+                        // Crear URL para el blob
                             const url = window.URL.createObjectURL(blob);
                             
                             // Crear elemento de enlace temporal para forzar la descarga
@@ -1627,7 +1741,7 @@ function setupDownloadHandlers() {
                             a.style.display = 'none';
                             a.href = url;
                             
-                            // Obtener el nombre del archivo del atributo download del enlace original
+                        // Obtener el nombre del archivo
                             a.download = downloadLink.getAttribute('download') || 'archivo_descargado';
                             
                             // Añadir al DOM, hacer clic y luego eliminar
@@ -1636,10 +1750,13 @@ function setupDownloadHandlers() {
                             window.URL.revokeObjectURL(url);
                             document.body.removeChild(a);
                             
-                            // Actualizar UI
-                            progressBar.style.width = '100%';
+                        // Actualizar UI final
                             statusText.textContent = '¡Descarga completada!';
+                        statusText.classList.add('success-message');
                             downloadLink.classList.remove('downloading');
+                        
+                        // Mostrar notificación de descarga completada
+                        showTransferNotification(`Archivo "${a.download}" descargado correctamente`, 'success');
                             
                             // Limpiar el indicador después de un tiempo
                             setTimeout(() => {
@@ -1647,33 +1764,39 @@ function setupDownloadHandlers() {
                                     downloadIndicator.parentNode.removeChild(downloadIndicator);
                                 }
                             }, 3000);
-                        } else {
-                            statusText.textContent = `Error: ${xhr.status}`;
+                    })
+                    .catch(error => {
+                        console.error('Error en la descarga:', error);
+                        statusText.textContent = `Error: ${error.message}`;
                             downloadLink.classList.remove('downloading');
-                        }
-                    };
-                    
-                    // En caso de error
-                    xhr.onerror = function(e) {
-                        clearInterval(progressInterval);
-                        console.error('Error en la descarga:', e);
-                        statusText.textContent = 'Error en la descarga';
-                        downloadLink.classList.remove('downloading');
-                    };
-                    
-                    // En caso de abortar
-                    xhr.onabort = function() {
-                        clearInterval(progressInterval);
-                        statusText.textContent = 'Descarga cancelada';
-                        downloadLink.classList.remove('downloading');
-                    };
-                    
-                    // Iniciar la descarga
-                    xhr.send();
+                    });
                 }
             }
         }
     });
+}
+
+// Función auxiliar para obtener el nombre de archivo de la respuesta HTTP
+function getFileNameFromResponse(response) {
+    // Intentar obtener el nombre del archivo del encabezado Content-Disposition
+    const contentDisposition = response.headers.get('Content-Disposition');
+    if (contentDisposition) {
+        // Buscar filename= o filename*= en el encabezado Content-Disposition
+        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const matches = filenameRegex.exec(contentDisposition);
+        if (matches && matches[1]) {
+            // Limpiar comillas si existen
+            return matches[1].replace(/['"]/g, '');
+        }
+    }
+    
+    // Si no encontramos el nombre en headers, intentar extraerlo de la URL
+    const url = new URL(response.url);
+    const pathSegments = url.pathname.split('/');
+    const lastSegment = pathSegments[pathSegments.length - 1];
+    
+    // Eliminar parámetros de consulta si existen
+    return lastSegment.split('?')[0] || null;
 }
 
 // Llamar a la función setupDownloadHandlers cuando el DOM esté listo
@@ -1728,9 +1851,9 @@ function logout() {
 }
 
 // Agregar evento de clic al botón de logout
-if (logoutBtn) {
+    if (logoutBtn) {
     logoutBtn.addEventListener('click', function(e) {
-        e.preventDefault();
+            e.preventDefault();
         logout();
     });
 }
@@ -1755,5 +1878,241 @@ document.head.insertAdjacentHTML('beforeend', `
     .message.error .status-indicator {
         color: var(--danger-color);
     }
+    
+    /* Estilos mejorados para indicadores de transferencia */
+    .upload-progress, .download-progress {
+        height: 8px;
+        background-color: rgba(0,0,0,0.1);
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 5px 0;
+        transition: height 0.3s ease;
+    }
+    
+    .upload-progress-bar, .download-progress-bar, .upload-progress-bar-small {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        width: 0%;
+        transition: width 0.3s ease;
+        background-size: 15px 15px;
+        background-image: linear-gradient(
+            45deg, 
+            rgba(255, 255, 255, 0.15) 25%, 
+            transparent 25%, 
+            transparent 50%, 
+            rgba(255, 255, 255, 0.15) 50%, 
+            rgba(255, 255, 255, 0.15) 75%, 
+            transparent 75%, 
+            transparent
+        );
+        animation: progress-bar-stripes 1s linear infinite;
+    }
+    
+    @keyframes progress-bar-stripes {
+        from { background-position: 0 0; }
+        to { background-position: 15px 0; }
+    }
+    
+    .upload-status, .download-status {
+        font-size: 12px;
+        color: var(--text-color);
+        margin-top: 3px;
+        transition: color 0.3s ease;
+    }
+    
+    .error-message {
+        color: var(--danger-color) !important;
+    }
+    
+    .success-message {
+        color: var(--success-color) !important;
+    }
+    
+    .downloading .fas, .uploading-message .fas {
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+    }
+    
+    /* Tooltip para información de transferencia */
+    .transfer-info-tooltip {
+        position: absolute;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        max-width: 200px;
+        z-index: 100;
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    
+    .file-info:hover .transfer-info-tooltip,
+    .download-btn:hover .transfer-info-tooltip {
+        visibility: visible;
+        opacity: 1;
+    }
 </style>
 `);
+
+// Función para mostrar notificaciones de transferencia mejoradas
+function showTransferNotification(message, type = 'info') {
+    // Crear elemento de notificación si no existe
+    let transferNotif = document.getElementById('transfer-notification');
+    
+    if (!transferNotif) {
+        transferNotif = document.createElement('div');
+        transferNotif.id = 'transfer-notification';
+        transferNotif.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 9999;
+            max-width: 350px;
+            transform: translateY(100px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            opacity: 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        `;
+        document.body.appendChild(transferNotif);
+    }
+    
+    // Establecer ícono según el tipo
+    let icon = '';
+    switch(type) {
+        case 'success': 
+            icon = '<i class="fas fa-check-circle" style="color: #2ecc71; margin-right: 8px;"></i>';
+            break;
+        case 'error':
+            icon = '<i class="fas fa-exclamation-circle" style="color: #e74c3c; margin-right: 8px;"></i>';
+            break;
+        case 'warning':
+            icon = '<i class="fas fa-exclamation-triangle" style="color: #f39c12; margin-right: 8px;"></i>';
+            break;
+        default:
+            icon = '<i class="fas fa-info-circle" style="color: #3498db; margin-right: 8px;"></i>';
+    }
+    
+    // Actualizar contenido
+    transferNotif.innerHTML = `${icon}${message}`;
+    
+    // Mostrar notificación
+    setTimeout(() => {
+        transferNotif.style.transform = 'translateY(0)';
+        transferNotif.style.opacity = '1';
+    }, 10);
+    
+    // Ocultar después de 5 segundos
+    setTimeout(() => {
+        transferNotif.style.transform = 'translateY(100px)';
+        transferNotif.style.opacity = '0';
+        
+        // Remover elemento después de la animación
+        setTimeout(() => {
+            if (transferNotif && transferNotif.parentNode) {
+                transferNotif.parentNode.removeChild(transferNotif);
+            }
+        }, 300);
+    }, 5000);
+}
+
+// Después de la línea 'window.URL.revokeObjectURL(url);' en la función de descarga
+document.body.removeChild(a);
+
+// Actualizar UI final
+statusText.textContent = '¡Descarga completada!';
+statusText.classList.add('success-message');
+downloadLink.classList.remove('downloading');
+
+// Mostrar notificación de descarga completada
+showTransferNotification(`Archivo "${a.download}" descargado correctamente`, 'success');
+
+// Limpiar el indicador después de un tiempo
+// ... existing code ...
+
+// En la parte final de la función handleMediaUploadInternal, 
+// Mejora para crear un worker si está disponible
+function initializeWebWorker() {
+    // Verificar si el navegador soporta Web Workers
+    if (window.Worker) {
+        try {
+            // Crear el código del worker dinámicamente
+            const workerCode = `
+                self.onmessage = function(e) {
+                    const { action, data } = e.data;
+                    
+                    if (action === 'processChunk') {
+                        // Procesar un fragmento (opcional: compresión, conversión, etc.)
+                        // Por ahora solo reportamos progreso
+                        self.postMessage({
+                            action: 'progress',
+                            data: { chunkIndex: data.chunkIndex, processed: true }
+                        });
+                    }
+                    
+                    if (action === 'cleanup') {
+                        // Limpieza final
+                        self.postMessage({ action: 'completed' });
+                        self.close();
+                    }
+                };
+            `;
+            
+            // Crear blob con el código del worker
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(blob);
+            
+            // Crear worker
+            const worker = new Worker(workerUrl);
+            
+            // Limpieza
+            URL.revokeObjectURL(workerUrl);
+            
+            console.log('Web Worker para transferencias creado correctamente');
+            return worker;
+                } catch (error) {
+            console.error('Error al crear Web Worker:', error);
+            return null;
+        }
+    }
+    
+    console.log('Web Workers no están disponibles en este navegador');
+    return null;
+}
+
+// Crear el worker al cargar la página
+const transferWorker = initializeWebWorker();
+
+// Uso en la función uploadChunk
+// Buscar la función uploadChunk y agregar después de:
+// "console.log(`Procesando fragmento ${chunkIndex + 1}/${totalChunks}, tamaño: ${formatFileSize(chunk.size)}`);"
+// el siguiente código:
+if (transferWorker) {
+    // Usar el worker para procesar el chunk (optimización)
+    transferWorker.postMessage({
+        action: 'processChunk',
+        data: { chunkIndex, chunk: 'data-too-large-to-send' } // No enviamos el chunk real para evitar duplicar memoria
+    });
+    
+    // Manejar respuesta del worker
+    const workerMessageHandler = function(e) {
+        if (e.data.action === 'progress' && e.data.data.chunkIndex === chunkIndex) {
+            // El worker completó el procesamiento de este chunk
+            transferWorker.removeEventListener('message', workerMessageHandler);
+        }
+    };
+    
+    transferWorker.addEventListener('message', workerMessageHandler);
+}
+// ... existing code ...

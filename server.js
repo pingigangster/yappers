@@ -644,7 +644,35 @@ app.post('/api/admin/users/delete-anonymous', (req, res) => {
     userController.deleteAnonymousUsers(req, res);
 });
 
-// Borrar todos los mensajes (requiere autenticación)
+// API para el panel de administrador - Borrar todos los mensajes (método DELETE)
+app.delete('/api/admin/messages', (req, res) => {
+    const { password } = req.body;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    messageController.deleteAllMessages()
+        .then(result => {
+            // Notificar a todos los usuarios conectados que los mensajes han sido eliminados
+            console.log('Emitiendo evento messagesDeleted a todos los usuarios conectados');
+            io.emit('messagesDeleted', { 
+                type: 'all',
+                message: 'Todos los mensajes han sido eliminados por el administrador.'
+            });
+            console.log('Evento messagesDeleted emitido. Usuarios conectados:', Object.keys(io.sockets.sockets).length);
+            
+            res.status(200).json({ 
+                success: true, 
+                message: `Todos los mensajes eliminados correctamente. ${result.deletedCount} mensajes y ${result.mediaDeleted} archivos multimedia eliminados.`
+            });
+        })
+        .catch(error => {
+            res.status(500).json({ success: false, message: 'Error al eliminar mensajes', error: error.message });
+        });
+});
+
+// Ruta adicional para compatibilidad (redirecciona a la ruta DELETE)
 app.post('/api/admin/messages/delete-all', (req, res) => {
     const { password } = req.body;
     
@@ -654,6 +682,12 @@ app.post('/api/admin/messages/delete-all', (req, res) => {
     
     messageController.deleteAllMessages()
         .then(result => {
+            // Notificar a todos los usuarios conectados que los mensajes han sido eliminados
+            io.emit('messagesDeleted', { 
+                type: 'all',
+                message: 'Todos los mensajes han sido eliminados por el administrador.'
+            });
+            
             res.status(200).json({ 
                 success: true, 
                 message: `Todos los mensajes eliminados correctamente. ${result.deletedCount} mensajes y ${result.mediaDeleted} archivos multimedia eliminados.`
@@ -1575,26 +1609,6 @@ app.post('/api/admin/stats', (req, res) => {
     .catch(error => {
         res.status(500).json({ success: false, message: 'Error al obtener estadísticas', error: error.message });
     });
-});
-
-// API para el panel de administrador - Borrar todos los mensajes (método DELETE)
-app.delete('/api/admin/messages', (req, res) => {
-    const { password } = req.body;
-    
-    if (password !== ADMIN_PASSWORD) {
-        return res.status(401).json({ success: false, message: 'No autorizado' });
-    }
-    
-    messageController.deleteAllMessages()
-        .then(result => {
-            res.status(200).json({ 
-                success: true, 
-                message: `Todos los mensajes eliminados correctamente. ${result.deletedCount} mensajes y ${result.mediaDeleted} archivos multimedia eliminados.`
-            });
-        })
-        .catch(error => {
-            res.status(500).json({ success: false, message: 'Error al eliminar mensajes', error: error.message });
-        });
 });
 
 // API para el panel de administrador - Borrar un usuario por ID (método DELETE)
