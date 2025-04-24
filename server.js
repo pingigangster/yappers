@@ -10,6 +10,7 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const session = require('express-session');
+const mongoose = require('mongoose'); // Asegurarse que mongoose está importado
 
 // Configuración de Passport
 require('./config/passport');
@@ -25,11 +26,18 @@ const JWT_SECRET = 'tu_secreto_secreto_secreto'; // Reemplaza con tu secreto rea
 
 const app = express();
 const server = http.createServer(app);
+
+// Indicar a Express que confíe en la cabecera X-Forwarded-Proto de Cloudflare
+// El '1' significa que confíe en el primer proxy delante de él.
+app.set('trust proxy', 1);
+
 const io = socketio(server, {
     maxHttpBufferSize: 200e6, // Aumentar a 200 MB para permitir archivos multimedia más grandes
     pingTimeout: 60000, // Aumentar el tiempo de espera para detectar desconexiones (60 segundos)
     cors: {
-        origin: "*",
+        // Permitir conexiones desde la URL del túnel (obtenida de variable de entorno) o cualquier origen si no está definida.
+        // Asegúrate de establecer la variable de entorno CLOUDFLARE_TUNNEL_URL en tu entorno.
+        origin: process.env.CLOUDFLARE_TUNNEL_URL || "*",
         methods: ["GET", "POST"]
     }
 });
@@ -44,6 +52,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
+        // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
         secure: process.env.NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000 // 1 día
     }
@@ -155,10 +164,24 @@ const connectWithRetry = async (retries = 5, delay = 5000) => {
 };
 
 // Iniciar la conexión con retry
-connectWithRetry().then(connected => {
+connectWithRetry().then(async (connected) => {
     if (!connected) {
         console.warn('La aplicación continuará funcionando sin persistencia de datos');
+    } else {
+        // LIMPIEZA AL INICIO
+        try {
+            console.log('Realizando limpieza inicial de estado de usuarios...');
+            const User = require('./db/models/User'); 
+            const result = await User.updateMany({}, { $set: { isActive: false, socketId: null } });
+            console.log(`Limpieza completada: ${result.modifiedCount} usuarios marcados como inactivos.`);
+        } catch (cleanupError) {
+            console.error('Error durante la limpieza inicial de usuarios:', cleanupError);
+        }
     }
+    
+    // Poner el servidor a escuchar DESPUÉS de intentar la conexión y limpieza
+    const PORT = process.env.PORT || 3000;
+    server.listen(PORT, '0.0.0.0', () => console.log(`Servidor ejecutándose en puerto ${PORT} y escuchando en 0.0.0.0`));
 });
 
 // Rutas de autenticación
@@ -195,6 +218,7 @@ app.post('/api/auth/register', async (req, res) => {
         res.cookie('token', result.token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+            // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
             secure: process.env.NODE_ENV === 'production'
         });
         
@@ -225,6 +249,7 @@ app.post('/api/auth/login', async (req, res) => {
         res.cookie('token', result.token, {
             httpOnly: true,
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+            // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
             secure: process.env.NODE_ENV === 'production'
         });
         
@@ -245,6 +270,7 @@ app.post('/api/auth/logout', (req, res) => {
     // Eliminar cookie utilizando las mismas opciones que al crearla
     res.clearCookie('token', {
         httpOnly: true,
+        // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
         secure: process.env.NODE_ENV === 'production',
         path: '/'
     });
@@ -337,6 +363,7 @@ app.get('/api/auth/google/callback',
             res.cookie('token', loginResult.token, {
                 httpOnly: true,
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+                // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
                 secure: process.env.NODE_ENV === 'production'
             });
             
@@ -485,6 +512,91 @@ app.get('/api/files/:id', async (req, res) => {
     }
 });
 
+// Ruta para streaming de archivos (video/audio)
+app.get('/api/stream/:mediaId', async (req, res) => {
+    try {
+        const mediaId = req.params.mediaId;
+
+        // Validar si es un ObjectId válido
+        if (!mongoose.Types.ObjectId.isValid(mediaId)) {
+            return res.status(400).json({ success: false, message: 'ID de medio inválido' });
+        }
+
+        const db = mongoose.connection.db;
+        const bucket = new mongoose.mongo.GridFSBucket(db, {
+            bucketName: 'uploads'
+        });
+
+        const files = await bucket.find({ _id: new mongoose.Types.ObjectId(mediaId) }).toArray();
+        if (!files || files.length === 0) {
+            console.log(`Stream Error: Archivo no encontrado con ID ${mediaId}`);
+            return res.status(404).json({ success: false, message: 'Archivo no encontrado' });
+        }
+        const file = files[0];
+
+        // Soporte para solicitudes de rango (streaming)
+        const range = req.headers.range;
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : file.length - 1;
+            const chunksize = (end - start) + 1;
+
+            if (start >= file.length || end >= file.length) {
+                // Rango inválido
+                res.status(416).header({
+                    'Content-Range': `bytes */${file.length}`
+                });
+                return res.send();
+            }
+            
+            console.log(`Streaming chunk: bytes ${start}-${end}/${file.length}`);
+
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${file.length}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': file.contentType,
+            });
+
+            const downloadStream = bucket.openDownloadStream(new mongoose.Types.ObjectId(mediaId), {
+                start: start,
+                end: end + 1 // end es inclusivo en la API de GridFS
+            });
+
+            downloadStream.pipe(res);
+            downloadStream.on('error', (err) => {
+                console.error('Error en stream de GridFS (rango):', err);
+                res.status(500).send('Error al transmitir el archivo');
+            });
+            downloadStream.on('end', () => {
+                res.end();
+            });
+        } else {
+            // Sin rango, enviar archivo completo
+            console.log(`Streaming completo: ${file.filename}`);
+            res.writeHead(200, {
+                'Content-Length': file.length,
+                'Content-Type': file.contentType,
+                'Accept-Ranges': 'bytes' // Indicar que soportamos rangos
+            });
+
+            const downloadStream = bucket.openDownloadStream(new mongoose.Types.ObjectId(mediaId));
+            downloadStream.pipe(res);
+            downloadStream.on('error', (err) => {
+                console.error('Error en stream de GridFS (completo):', err);
+                res.status(500).send('Error al transmitir el archivo');
+            });
+            downloadStream.on('end', () => {
+                res.end();
+            });
+        }
+    } catch (error) {
+        console.error('Error en la ruta /api/stream:', error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+});
+
 // Rutas para el panel de administrador
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
@@ -524,6 +636,7 @@ app.post('/api/admin/login', async (req, res) => {
             res.cookie('token', result.token, {
                 httpOnly: true,
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+                // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
                 secure: process.env.NODE_ENV === 'production'
             });
             
@@ -863,6 +976,65 @@ io.on('connection', async (socket) => {
     console.log(`Nueva conexión: ${socket.id}`);
     socket.emit('connectionEstablished', { id: socket.id });
     
+    // Manejar eventos de ping para verificación de conexión
+    socket.on('ping', (data, callback) => {
+        // Solo para diagnóstico
+        console.log(`Ping recibido de ${socket.id}`);
+        
+        // Responder inmediatamente para confirmar que el socket está activo
+        if (callback && typeof callback === 'function') {
+            callback({ success: true, time: Date.now() });
+        }
+    });
+
+    // Manejar la inicialización de la carga de archivos
+    socket.on('initializeUpload', async (data, callback) => {
+        try {
+            console.log(`Inicialización de carga recibida desde ${socket.id}:`, data?.sessionId || 'sin sessionId');
+            
+            // Verificar que los datos sean válidos
+            if (!data || !data.sessionId || !data.fileName || !data.totalChunks) {
+                console.error('Datos de inicialización incompletos');
+                if (callback && typeof callback === 'function') {
+                    callback({ success: false, error: 'Datos de inicialización incompletos' });
+                }
+                return;
+            }
+
+            // Obtener usuario por socketId
+            const users = await userController.getConnectedUsers();
+            const user = users.find(u => u.socketId === socket.id);
+            
+            if (!user) {
+                console.error('Usuario no encontrado al inicializar carga');
+                if (callback && typeof callback === 'function') {
+                    callback({ success: false, error: 'Usuario no encontrado' });
+                }
+                return;
+            }
+
+            // Generar un ID único para el archivo (o usar el proporcionado)
+            const fileId = data.fileId || data.sessionId;
+            
+            console.log(`Inicializando carga para ${data.fileName} (${data.fileSize} bytes, ${data.totalChunks} chunks)`);
+            
+            // Enviar respuesta exitosa inmediatamente para evitar timeout
+            if (callback && typeof callback === 'function') {
+                callback({
+                    success: true,
+                    sessionId: data.sessionId,
+                    fileId: fileId,
+                    existingChunks: [] // Array de índices de chunks que ya existen en el servidor
+                });
+            }
+        } catch (error) {
+            console.error('Error al inicializar carga:', error);
+            if (callback && typeof callback === 'function') {
+                callback({ success: false, error: error.message || 'Error al inicializar carga' });
+            }
+        }
+    });
+
     // Manejar el evento de unirse al chat
     socket.on('joinChat', async ({ token, isFirstVisit }) => {
         // Declarar username en un ámbito que sea accesible dentro de todo el evento
@@ -1016,56 +1188,6 @@ io.on('connection', async (socket) => {
         console.log(`Proceso de joinChat completado para ${username}`);
     });
 
-    // Escuchar chatMessage (mensaje de texto)
-    socket.on('chatMessage', async (msg, callback) => {
-        try {
-            // Obtener usuario por socketId
-            const users = await userController.getConnectedUsers();
-            const user = users.find(u => u.socketId === socket.id);
-            
-            if (user) {
-                // Validar longitud del mensaje
-                const validatedMsg = msg.length > MAX_MESSAGE_LENGTH 
-                    ? msg.substring(0, MAX_MESSAGE_LENGTH) 
-                    : msg;
-                
-                // Guardar mensaje en la base de datos
-                const savedMessage = await messageController.saveTextMessage(user.username, socket.id, validatedMsg);
-                
-                // Emitir mensaje a todos los clientes
-                io.emit('message', {
-                    username: user.username,
-                    userId: socket.id,  // Mantenemos socket.id para consistencia
-                    text: validatedMsg,
-                    time: moment(savedMessage.createdAt).format('HH:mm')
-                });
-                
-                // Enviar confirmación al remitente a través del callback
-                if (callback && typeof callback === 'function') {
-                    callback({ 
-                        success: true,
-                        messageId: savedMessage._id
-                    });
-                }
-            } else {
-                if (callback && typeof callback === 'function') {
-                    callback({ 
-                        success: false, 
-                        error: 'Usuario no encontrado'
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error al procesar mensaje de texto:', error);
-            if (callback && typeof callback === 'function') {
-                callback({ 
-                    success: false, 
-                    error: error.message || 'Error al guardar mensaje'
-                });
-            }
-        }
-    });
-
     // Escuchar mediaMessage (mensaje con archivo multimedia)
     socket.on('mediaMessage', async (data, callback) => {
         try {
@@ -1112,6 +1234,7 @@ io.on('connection', async (socket) => {
                 try {
                     // Guardar mensaje multimedia en la base de datos
                     const savedMessage = await messageController.saveMediaMessage(user.username, socket.id, messageData);
+                    console.log(`Mensaje multimedia guardado correctamente: ${savedMessage._id}`);
                     
                     // Cancelar el timeout ya que la operación completó exitosamente
                     clearTimeout(operationTimeout);
@@ -1127,17 +1250,21 @@ io.on('connection', async (socket) => {
                         fileName: messageData.fileName,
                         fileSize: messageData.fileSize,
                         isLargeFile: true, // Todos los archivos ahora se guardan en GridFS
-                        mediaId: savedMessage.mediaId || messageData.mediaId // Asegurar que el ID siempre esté disponible
+                        mediaId: savedMessage.mediaId || messageData.mediaId, // Asegurar que el ID siempre esté disponible
+                        _id: savedMessage._id.toString() // Añadir el ID del mensaje para facilitar actualizaciones
                     };
                 
-                    // Emitir mensaje a todos los clientes
-                    io.emit('mediaMessage', messageForClients);
+                    // Emitir mensaje a todos los DEMÁS clientes (no al remitente)
+                    socket.broadcast.emit('mediaMessage', messageForClients);
                     
                     // Enviar respuesta al cliente que subió el archivo
                     if (callback && typeof callback === 'function') {
                         callback({ 
                             success: true,
-                            mediaId: savedMessage.mediaId || messageData.mediaId
+                            mediaId: savedMessage.mediaId || messageData.mediaId,
+                            confirmedMessage: messageForClients, // Enviar el mensaje confirmado para actualizar la vista local
+                            status: 'confirmed', // Indicar que el mensaje está confirmado y no debe mostrarse como pendiente
+                            showClock: false // Campo explícito para indicar que no debe mostrarse el reloj
                         });
                     }
                 } catch (error) {
@@ -1177,24 +1304,35 @@ io.on('connection', async (socket) => {
     });
 
     // Manejar subida de archivos por fragmentos (chunks)
-    socket.on('chunkUpload', async (data, callback) => {
+    socket.on('chunkUpload', async (metadata, chunkBlob, callback) => {
         try {
-            // Verificar que los datos son válidos
-            if (!data || !data.chunkData) {
-                callback({ success: false, error: 'Datos del fragmento no proporcionados' });
-                return;
+            // Verificar que los datos y el callback son válidos
+            if (!metadata || !chunkBlob || typeof callback !== 'function') {
+                console.error('Llamada inválida a chunkUpload:', { hasMetadata: !!metadata, hasChunkBlob: !!chunkBlob, hasCallback: typeof callback === 'function' });
+                if (typeof callback === 'function') {
+                     callback({ success: false, error: 'Datos del fragmento o callback inválidos' });
+                }
+                return; 
             }
+
+            // Verificar que chunkBlob es un Buffer (Socket.IO debería convertirlo)
+            if (!Buffer.isBuffer(chunkBlob)) {
+                 console.error('Error: chunkBlob no es un Buffer. Tipo recibido:', typeof chunkBlob);
+                 callback({ success: false, error: 'Tipo de datos del fragmento inesperado' });
+                 return;
+            }
+
+            console.log(`Chunk ${metadata.chunkIndex + 1}/${metadata.chunkTotal} recibido de ${socket.id} (${chunkBlob.length} bytes)`);
 
             // Establecer un timeout para la operación
             const operationTimeout = setTimeout(() => {
-                // Si el callback todavía existe, enviar respuesta de timeout
+                console.error(`Timeout procesando chunk ${metadata.chunkIndex + 1} de ${socket.id}`);
                 if (callback && typeof callback === 'function') {
                     callback({ 
                         success: false, 
                         error: 'Tiempo de espera agotado en el servidor al procesar el fragmento' 
                     });
-                    // Invalidar el callback para que no se llame dos veces
-                    callback = null;
+                    callback = null; // Invalidar para evitar doble llamada
                 }
             }, 60000); // 60 segundos de timeout
 
@@ -1204,28 +1342,31 @@ io.on('connection', async (socket) => {
             
             if (!user) {
                 clearTimeout(operationTimeout);
+                console.error(`Usuario no encontrado para socket ${socket.id} al procesar chunk`);
                 callback({ success: false, error: 'Usuario no encontrado' });
                 return;
             }
             
             // Validar longitud del texto asociado al archivo (solo para el primer fragmento)
-            const validatedText = data.text && data.text.length > MAX_MESSAGE_LENGTH 
-                ? data.text.substring(0, MAX_MESSAGE_LENGTH) 
-                : data.text || '';
+            const validatedText = metadata.text && metadata.text.length > MAX_MESSAGE_LENGTH 
+                ? metadata.text.substring(0, MAX_MESSAGE_LENGTH) 
+                : metadata.text || '';
             
             // Iniciar procesamiento asíncrono del fragmento
+            // CORREGIDO: Pasar metadatos y el buffer directamente
             const processPromise = messageController.processFileChunk({
                 username: user.username,
                 userId: socket.id,
-                chunkData: data.chunkData,
-                fileName: data.fileName,
-                fileType: data.fileType,
-                fileSize: data.fileSize,
+                chunkBuffer: chunkBlob, // <<--- Pasar el buffer directamente
+                fileName: metadata.fileName,
+                fileType: metadata.fileType,
+                fileSize: metadata.fileSize,
                 text: validatedText,
-                currentChunk: data.currentChunk,
-                totalChunks: data.totalChunks,
-                isLastChunk: data.isLastChunk,
-                fileId: data.fileId
+                currentChunk: metadata.chunkIndex,
+                totalChunks: metadata.chunkTotal,
+                isLastChunk: metadata.isLastChunk,
+                fileId: metadata.fileId,
+                checksum: metadata.checksum // Pasar checksum si se necesita verificar
             });
             
             // Manejar resultado o error
@@ -1235,29 +1376,31 @@ io.on('connection', async (socket) => {
                 
                 // Verificar que el callback todavía sea válido
                 if (callback && typeof callback === 'function') {
-                    // Respuesta al cliente que subió el fragmento
-                    if (data.isLastChunk) {
-                        // Si es el último fragmento, emitir el mensaje completo a todos los clientes
-                        io.emit('mediaMessage', {
-                            username: user.username,
-                            userId: socket.id,
-                            time: moment().format('HH:mm'),
-                            text: validatedText,
-                            media: processedChunk.mediaUrl,
-                            fileType: data.fileType,
-                            fileName: data.fileName,
-                            fileSize: data.fileSize,
-                            isLargeFile: true,
-                            mediaId: processedChunk.fileId
+                    
+                    // Si processFileChunk devolvió confirmedMessage, significa que fue el último chunk y todo se guardó.
+                    if (processedChunk.confirmedMessage) {
+                        console.log('Último fragmento procesado y guardado. Enviando broadcast y callback con confirmación.');
+                        // Emitir a todos los DEMÁS clientes
+                        socket.broadcast.emit('mediaMessage', processedChunk.confirmedMessage);
+                        
+                        // Enviar confirmación COMPLETA al remitente
+                        callback({
+                            success: true, 
+                            fileId: processedChunk.fileId,
+                            chunkProcessed: processedChunk.chunkProcessed, // Usar info del resultado
+                            totalChunks: processedChunk.totalChunks,
+                            confirmedMessage: processedChunk.confirmedMessage // <<--- ¡AÑADIR ESTO! ---
+                        });
+                    } else {
+                        // No es el último chunk, solo confirmar progreso
+                        console.log(`Fragmento ${processedChunk.chunkProcessed}/${processedChunk.totalChunks} procesado. Enviando callback de progreso.`);
+                        callback({ 
+                            success: true, 
+                            fileId: processedChunk.fileId,
+                            chunkProcessed: processedChunk.chunkProcessed,
+                            totalChunks: processedChunk.totalChunks
                         });
                     }
-                    
-                    callback({ 
-                        success: true, 
-                        fileId: processedChunk.fileId,
-                        chunkProcessed: data.currentChunk + 1,
-                        totalChunks: data.totalChunks
-                    });
                 }
             }).catch(error => {
                 // Cancelar el timeout ya que tenemos un error
@@ -1286,6 +1429,106 @@ io.on('connection', async (socket) => {
             }
         }
     });
+
+    // <<--- AÑADIR ESTE NUEVO LISTENER --->>
+    socket.on('finalizeUpload', async (data, callback) => {
+        try {
+            console.log(`Solicitud para finalizar carga recibida: ${data?.fileId || data?.sessionId}`);
+            
+            if (!data || !data.fileId || !data.fileName) {
+                console.error('Datos incompletos para finalizar carga');
+                if (callback) callback({ success: false, error: 'Datos incompletos' });
+                return;
+            }
+
+            // Obtener usuario
+            const users = await userController.getConnectedUsers();
+            const user = users.find(u => u.socketId === socket.id);
+            if (!user) {
+                console.error('Usuario no encontrado al finalizar carga');
+                if (callback) callback({ success: false, error: 'Usuario no encontrado' });
+                return;
+            }
+
+            // Llamar al controlador para finalizar
+            const result = await messageController.finalizeFileChunk({
+                username: user.username,
+                userId: socket.id,
+                fileId: data.fileId,
+                fileName: data.fileName,
+                totalChunks: data.totalChunks, // Puede que no lo necesitemos aquí si ya está en tempStorage
+                completedChunks: data.completedChunks, // Lista de chunks completados (para verificación)
+                text: data.text || ''
+                // fileType y fileSize deberían obtenerse/confirmarse en el controlador
+            });
+
+            // Si la finalización fue exitosa y tenemos el mensaje confirmado
+            if (result.success && result.confirmedMessage) {
+                console.log(`Archivo ${data.fileName} finalizado correctamente. ID: ${result.fileId}`);
+                // Emitir a otros clientes
+                socket.broadcast.emit('mediaMessage', result.confirmedMessage);
+                // Enviar confirmación al remitente
+                if (callback) callback({ success: true, mediaId: result.fileId, confirmedMessage: result.confirmedMessage });
+            } else {
+                // Si falló la finalización en el controlador
+                console.error(`Error al finalizar archivo en controlador: ${result.error}`);
+                if (callback) callback({ success: false, error: result.error || 'Error al finalizar archivo' });
+            }
+
+        } catch (error) {
+            console.error('Error general en finalizeUpload:', error);
+            if (callback) callback({ success: false, error: error.message || 'Error interno del servidor' });
+        }
+    });
+    // <<--- FIN DEL NUEVO LISTENER --->>
+
+    // <<--- AÑADIR LISTENER PARA chatMessage --->>
+    socket.on('chatMessage', async (msg, callback) => {
+        try {
+            // Obtener usuario por socketId
+            const users = await userController.getConnectedUsers();
+            const user = users.find(u => u.socketId === socket.id);
+
+            if (user) {
+                // Validar y limitar longitud del mensaje
+                const validatedMsg = msg.length > MAX_MESSAGE_LENGTH 
+                    ? msg.substring(0, MAX_MESSAGE_LENGTH) 
+                    : msg;
+                
+                // Guardar mensaje en la base de datos
+                const savedMessage = await messageController.saveTextMessage(user.username, socket.id, validatedMsg);
+                
+                // Formatear mensaje para enviar a los clientes
+                const formattedMessage = {
+                    username: user.username,
+                    userId: socket.id,
+                    text: validatedMsg,
+                    time: moment(savedMessage.createdAt).format('HH:mm'),
+                    _id: savedMessage._id.toString() // Incluir ID para posible referencia futura
+                };
+
+                // CORREGIDO: Emitir a todos EXCEPTO al remitente
+                socket.broadcast.emit('message', formattedMessage);
+                console.log(`Mensaje de ${user.username} emitido a todos los demás.`);
+
+                // Enviar confirmación al remitente (callback)
+                if (callback && typeof callback === 'function') {
+                    callback({ success: true, messageId: savedMessage._id.toString() });
+                }
+            } else {
+                 console.error(`Usuario no encontrado para socket ${socket.id} al enviar chatMessage`);
+                 if (callback && typeof callback === 'function') {
+                     callback({ success: false, error: 'Usuario no autenticado o no encontrado.' });
+                 }
+            }
+        } catch (error) {
+            console.error('Error al procesar chatMessage:', error);
+             if (callback && typeof callback === 'function') {
+                 callback({ success: false, error: 'Error interno al procesar mensaje.' });
+             }
+        }
+    });
+    // <<--- FIN DEL LISTENER chatMessage --->>
 
     // Cuando un cliente se desconecta
     socket.on('disconnect', async () => {
@@ -1655,8 +1898,4 @@ app.delete('/api/admin/users', (req, res) => {
     // Agregar la instancia io a la solicitud para que el controlador pueda usarla
     req.io = io;
     userController.deleteAllUsers(req, res);
-});
-
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, () => console.log(`Servidor ejecutándose en puerto ${PORT}`)); 
+}); 

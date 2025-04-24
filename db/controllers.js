@@ -5,6 +5,7 @@ const Grid = require('gridfs-stream');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
+const moment = require('moment');
 
 // Configuración de JWT
 const JWT_SECRET = 'chat_app_secret_key_2023'; // Idealmente esto debería estar en variables de entorno
@@ -334,8 +335,10 @@ const userController = {
             const user = await User.findOne({ socketId });
             if (user) {
                 user.socketId = null;
+                user.isActive = false;
                 user.lastActive = new Date();
                 await user.save();
+                console.log(`Usuario ${user.username} marcado como inactivo`);
                 return user;
             }
             return null;
@@ -885,172 +888,90 @@ const messageController = {
     // Procesar un fragmento de archivo
     async processFileChunk(chunkData) {
         try {
+            // CORREGIDO: Desestructurar usando los nombres correctos y aceptar chunkBuffer
             const { 
-                username, userId, chunkData: dataChunk, fileName, fileType, fileSize, 
-                text, currentChunk, totalChunks, isLastChunk, fileId 
+                username, userId, chunkBuffer, fileName, fileType, fileSize, 
+                text, currentChunk, totalChunks, isLastChunk, fileId, checksum 
             } = chunkData;
+
+            console.log(`Procesando chunk ${currentChunk + 1}/${totalChunks}. ID entrante: ${fileId}, Es último: ${isLastChunk}`);
+
+            // CORREGIDO: Ya no necesitamos procesar DataURL, chunkBuffer es el Buffer
+            // const matches = dataChunk.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            // if (!matches || matches.length !== 3) {
+            //     throw new Error('Formato de datos inválido para el fragmento');
+            // }
+            // const mimeType = matches[1];
+            // const buffer = Buffer.from(matches[2], 'base64');
+
+            // Verificar si el buffer es válido
+            if (!chunkBuffer || !Buffer.isBuffer(chunkBuffer) || chunkBuffer.length === 0) {
+                 console.error('Error: Buffer del fragmento inválido o vacío.', { length: chunkBuffer?.length });
+                 throw new Error('Buffer del fragmento inválido o vacío');
+            }
             
-            // Establecer un límite de tiempo para la operación completa
-            const operationPromise = new Promise(async (resolve, reject) => {
-                try {
-                    // Extraer datos base64 y convertir a buffer
-                    const matches = dataChunk.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-                    if (!matches || matches.length !== 3) {
-                        throw new Error('Formato de datos inválido para el fragmento');
-                    }
-                    
-                    const mimeType = matches[1];
-                    const buffer = Buffer.from(matches[2], 'base64');
-                    
-                    if (currentChunk === 0) {
-                        // Para el primer fragmento, generar un ID único para el archivo
-                        const newFileId = new mongoose.Types.ObjectId();
-                        
-                        // Inicializar almacenamiento para este archivo
-                        tempChunksStorage.set(newFileId.toString(), {
-                            chunks: [buffer],
-                            mimeType,
-                            processed: 1,
-                            totalChunks,
-                            lastActivity: Date.now()
-                        });
-                        
-                        console.log(`Iniciando carga fragmentada. Archivo: ${fileName}, ID: ${newFileId}, Fragmentos totales: ${totalChunks}`);
-                        
-                        resolve({
-                            fileId: newFileId,
-                            mediaUrl: `/api/files/${newFileId}`
-                        });
-                        
-                    } else {
-                        // Verificar que tenemos un fileId válido
-                        if (!fileId) {
-                            throw new Error('ID de archivo no proporcionado para fragmento secundario');
-                        }
-                        
-                        // Obtener el almacenamiento para este archivo
-                        const fileStorage = tempChunksStorage.get(fileId);
-                        if (!fileStorage) {
-                            throw new Error('No se encontró almacenamiento para este archivo');
-                        }
-                        
-                        // Añadir este fragmento
-                        fileStorage.chunks.push(buffer);
-                        fileStorage.processed += 1;
-                        fileStorage.lastActivity = Date.now(); // Actualizar timestamp de actividad
-                        
-                        console.log(`Fragmento ${currentChunk+1}/${totalChunks} recibido para archivo ${fileId}`);
-                        
-                        // Si es el último fragmento, guardar el archivo completo en GridFS
-                        if (isLastChunk) {
-                            try {
-                                // Combinar todos los fragmentos en un solo buffer
-                                const completeBuffer = Buffer.concat(fileStorage.chunks);
-                                
-                                if (!gridFSBucket) {
-                                    throw new Error('GridFSBucket no está inicializado');
-                                }
-                                
-                                // Usar util.promisify y stream.pipeline para manejar streams con promesas
-                                const stream = require('stream');
-                                const { promisify } = require('util');
-                                const pipeline = promisify(stream.pipeline);
-                                
-                                // Crear un stream de lectura a partir del buffer combinado
-                                const readStream = new stream.Readable();
-                                readStream.push(completeBuffer);
-                                readStream.push(null); // Señal de fin de stream
-                                
-                                // Crear stream de escritura en GridFS
-                                const uploadStream = gridFSBucket.openUploadStreamWithId(
-                                    new mongoose.Types.ObjectId(fileId),
-                                    fileName || `file_${Date.now()}`,
-                                    {
-                                        contentType: fileStorage.mimeType,
-                                        metadata: {
-                                            username,
-                                            userId,
-                                            messageTime: formatTime(),
-                                            uploadType: 'chunked',
-                                            originalSize: fileSize
-                                        }
-                                    }
-                                );
-                                
-                                // Establecer timeout para la operación
-                                const saveTimeout = setTimeout(() => {
-                                    uploadStream.destroy(new Error('Timeout al guardar en GridFS'));
-                                    throw new Error('Tiempo de espera agotado al guardar en GridFS');
-                                }, 60000); // 60 segundos de timeout
-                                
-                                // Procesar el stream y esperar a que termine
-                                await pipeline(readStream, uploadStream);
-                                
-                                // Limpiar timeout y datos temporales
-                                clearTimeout(saveTimeout);
-                                tempChunksStorage.delete(fileId);
-                                
-                                console.log(`Archivo completo guardado en GridFS. ID: ${fileId}`);
-                                
-                                // Crear mensaje asociado al archivo
-                                const message = new Message({
-                                    text: text || '',
-                                    username,
-                                    userId,
-                                    time: formatTime(),
-                                    fileType,
-                                    fileName,
-                                    fileSize,
-                                    // No guardar el archivo directamente en el documento
-                                    media: null,
-                                    mediaId: fileId,
-                                    mediaUrl: `/api/files/${fileId}`,
-                                    isLargeFile: true,
-                                    createdAt: new Date()
-                                });
-                                
-                                // Guardar el mensaje
-                                const savedMessage = await message.save();
-                                console.log(`Mensaje con referencia al archivo guardado en la base de datos. ID: ${savedMessage._id}`);
-                                
-                                // Resolver con la información del archivo y mensaje
-                                resolve({
-                                    success: true,
-                                    fileId,
-                                    mediaUrl: `/api/files/${fileId}`,
-                                    messageId: savedMessage._id
-                                });
-                                
-                            } catch (saveError) {
-                                console.error('Error al guardar archivo completo:', saveError);
-                                // Limpiar datos temporales en caso de error
-                                tempChunksStorage.delete(fileId);
-                                reject(saveError);
-                            }
-                        } else {
-                            // No es el último fragmento, confirmar recepción
-                            resolve({
-                                fileId,
-                                currentChunk: currentChunk + 1,
-                                totalChunks
-                            });
-                        }
-                    }
-                } catch (error) {
-                    reject(error);
+            const buffer = chunkBuffer; // Usar el buffer directamente
+            
+            // TODO: Verificar checksum si es necesario
+            // if (checksum) { ... }
+            
+            let currentFileId = fileId; // Usar el ID que viene del cliente si existe
+            let fileStorage;
+            // Determinar mimeType (podríamos obtenerlo del primer chunk si no viene)
+            let mimeType = fileType; // Usar el fileType general como base
+
+            if (currentChunk === 0) {
+                // Primer fragmento: crear entrada en almacenamiento temporal
+                currentFileId = new mongoose.Types.ObjectId(); // Generar nuevo ID
+                
+                // Intentar obtener un mime type más específico del buffer si es posible
+                // (requiere una librería como 'file-type')
+                // Por ahora, usamos el fileType general
+                
+                fileStorage = {
+                    chunks: [buffer],
+                    mimeType: mimeType, // Usar el mimeType determinado
+                    processed: 1,
+                    totalChunks,
+                    lastActivity: Date.now()
+                };
+                tempChunksStorage.set(currentFileId.toString(), fileStorage);
+                console.log(`Iniciando carga fragmentada. Archivo: ${fileName}, ID asignado: ${currentFileId}, Fragmentos totales: ${totalChunks}`);
+            } else {
+                // Fragmentos siguientes: obtener almacenamiento existente
+                if (!currentFileId) {
+                    console.error("Error: No se proporcionó fileId para el fragmento", chunkData);
+                    throw new Error('ID de archivo no proporcionado para fragmento secundario');
                 }
-            });
+                fileStorage = tempChunksStorage.get(currentFileId.toString());
+                if (!fileStorage) {
+                    console.error(`Error: No se encontró almacenamiento para fileId ${currentFileId}`, Array.from(tempChunksStorage.keys()));
+                    throw new Error('No se encontró almacenamiento temporal para este archivo. ¿Expiró o falló el primer chunk?');
+                }
+                
+                // Añadir este fragmento
+                fileStorage.chunks.push(buffer);
+                fileStorage.processed += 1;
+                fileStorage.lastActivity = Date.now(); // Actualizar timestamp de actividad
+                console.log(`Fragmento ${currentChunk + 1}/${totalChunks} añadido para archivo ${currentFileId}`);
+            }
+
+            // <<--- MODIFICAR EL RETURN --->>
+            // // Siempre devolver éxito y el ID para continuar
+            return {
+                success: true,
+                fileId: currentFileId.toString(),
+                chunkProcessed: currentChunk + 1,
+                totalChunks
+            };
             
-            // Configurar un timeout general para la operación
-            const timeout = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Tiempo de espera agotado en el procesamiento del fragmento')), 120000);
-            });
-            
-            // Esperar la finalización de la operación o el timeout
-            return await Promise.race([operationPromise, timeout]);
         } catch (error) {
-            console.error(`Error al procesar fragmento de archivo: ${error}`);
-            throw error;
+            console.error(`Error en processFileChunk para chunk ${chunkData.currentChunk + 1}:`, error);
+            // Si hubo error, intentar limpiar el almacenamiento temporal si existe ID
+            if (chunkData.fileId) {
+                tempChunksStorage.delete(chunkData.fileId.toString());
+            }
+            throw error; // Relanzar el error para el handler exterior
         }
     },
     
@@ -1127,6 +1048,162 @@ const messageController = {
             throw error;
         }
     },
+
+    // <<--- AÑADIR ESTA NUEVA FUNCIÓN --->>
+    async finalizeFileChunk(finalizationData) {
+        const { username, userId, fileId, fileName, text, completedChunks } = finalizationData;
+        console.log(`Finalizando archivo ${fileId} para usuario ${username}`);
+
+        const fileStorage = tempChunksStorage.get(fileId.toString());
+
+        if (!fileStorage) {
+            console.error(`Error al finalizar: No se encontró almacenamiento temporal para ${fileId}`);
+            // Intentar buscar si el archivo ya se guardó por algún motivo (ej. último chunk lo finalizó)
+            try {
+                const existingMessage = await Message.findOne({ mediaId: fileId.toString() });
+                if (existingMessage) {
+                     console.warn(`El archivo ${fileId} ya parece estar finalizado y asociado al mensaje ${existingMessage._id}`);
+                     // Devolver datos del mensaje existente para actualizar UI
+                     const confirmedMessageData = {
+                         username: existingMessage.username,
+                         userId: existingMessage.userId,
+                         time: moment(existingMessage.createdAt).format('HH:mm'),
+                         text: existingMessage.text,
+                         media: `/api/files/${existingMessage.mediaId}`,
+                         fileType: existingMessage.fileType,
+                         fileName: existingMessage.fileName,
+                         fileSize: existingMessage.fileSize,
+                         isLargeFile: true,
+                         mediaId: existingMessage.mediaId,
+                         _id: existingMessage._id.toString()
+                     };
+                     return { success: true, fileId: fileId.toString(), confirmedMessage: confirmedMessageData };
+                } else {
+                     return { success: false, error: 'Almacenamiento temporal no encontrado y archivo no parece finalizado.' };
+                }
+            } catch(findError) {
+                 console.error('Error buscando mensaje existente al finalizar:', findError);
+                 return { success: false, error: 'Almacenamiento temporal no encontrado' };
+            }
+        }
+
+        // Verificar si tenemos suficientes chunks (comparar completedChunks.length con fileStorage.totalChunks)
+        // Opcional: implementar lógica para aceptar cargas parciales si completedChunks es >= 95% de totalChunks
+        if (completedChunks.length < fileStorage.totalChunks) {
+             console.warn(`Finalizando archivo parcial ${fileId}: ${completedChunks.length}/${fileStorage.totalChunks} chunks completados.`);
+             // Permitir continuar si la lógica del cliente lo decidió (isUploadComplete devolvió true)
+        }
+        
+        // Reconstruir el buffer solo con los chunks completados y en orden
+        const orderedChunks = [];
+        let finalSize = 0;
+        let finalFileType = fileStorage.mimeType; // Usar el tipo detectado en el primer chunk
+
+        for (let i = 0; i < fileStorage.chunks.length; i++) {
+             // Asumiendo que completedChunks es un array de índices [0, 1, 2, ...] o similar
+             // Si el índice actual `i` está en la lista de completados, añadir el chunk
+             if (completedChunks.includes(i)) {
+                  const chunkBuffer = fileStorage.chunks[i];
+                  if (chunkBuffer && Buffer.isBuffer(chunkBuffer)) {
+                       orderedChunks.push(chunkBuffer);
+                       finalSize += chunkBuffer.length;
+                  } else {
+                       console.warn(`Chunk ${i} marcado como completado pero buffer inválido/faltante para ${fileId}`);
+                  }
+             } else {
+                  console.log(`Omitiendo chunk ${i} (no completado) para ${fileId}`);
+             }
+        }
+
+        if (orderedChunks.length === 0) {
+            console.error(`Error al finalizar ${fileId}: No se encontraron chunks válidos completados.`);
+             tempChunksStorage.delete(fileId.toString()); // Limpiar aunque falle
+             return { success: false, error: 'No se pudieron recuperar fragmentos válidos.' };
+        }
+        
+        const completeBuffer = Buffer.concat(orderedChunks);
+
+        try {
+            if (!gridFSBucket) {
+                throw new Error('GridFSBucket no está inicializado');
+            }
+
+            const stream = require('stream');
+            const { promisify } = require('util');
+            const pipeline = promisify(stream.pipeline);
+
+            const readStream = new stream.Readable();
+            readStream.push(completeBuffer);
+            readStream.push(null);
+
+            const finalFileId = new mongoose.Types.ObjectId(fileId); // Usar el ID generado en el primer chunk
+            
+            // Intentar determinar un fileType más específico si no lo tenemos
+            if (!finalFileType) {
+                 // Usar una librería como 'file-type' o inferir de la extensión
+                 const ext = fileName.split('.').pop().toLowerCase();
+                 // Lógica simple para inferir tipo (mejorar si es necesario)
+                 if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext)) finalFileType = 'video';
+                 else if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) finalFileType = 'image';
+                 else finalFileType = 'file'; // Fallback
+                 console.log(`FileType inferido para ${fileName}: ${finalFileType}`);
+            }
+
+            const uploadStream = gridFSBucket.openUploadStreamWithId(
+                finalFileId,
+                fileName || `file_${Date.now()}`,
+                {
+                    contentType: finalFileType, // Usar el tipo determinado
+                    metadata: { username, userId, uploadType: 'chunked-finalized', originalSize: finalSize }
+                }
+            );
+
+            await pipeline(readStream, uploadStream);
+            console.log(`Archivo completo (finalizado) guardado en GridFS. ID: ${finalFileId}`);
+
+            // Crear y guardar el mensaje asociado
+            const message = new Message({
+                text: text || '',
+                username,
+                userId,
+                time: formatTime(),
+                fileType: finalFileType,
+                fileName,
+                fileSize: finalSize, // Tamaño real de los chunks combinados
+                media: null,
+                mediaId: finalFileId.toString(),
+                isLargeFile: true,
+                createdAt: new Date()
+            });
+            const savedMessage = await message.save();
+            console.log(`Mensaje (finalizado) con referencia al archivo guardado. ID: ${savedMessage._id}`);
+            
+            tempChunksStorage.delete(fileId.toString()); // Limpiar almacenamiento temporal
+
+            // Preparar respuesta para el cliente
+            const confirmedMessageData = {
+                username: savedMessage.username,
+                userId: savedMessage.userId,
+                time: moment(savedMessage.createdAt).format('HH:mm'),
+                text: savedMessage.text,
+                media: `/api/files/${finalFileId.toString()}`, // URL correcta
+                fileType: savedMessage.fileType,
+                fileName: savedMessage.fileName,
+                fileSize: savedMessage.fileSize,
+                isLargeFile: true,
+                mediaId: finalFileId.toString(),
+                _id: savedMessage._id.toString()
+            };
+
+            return { success: true, fileId: finalFileId.toString(), confirmedMessage: confirmedMessageData };
+
+        } catch (saveError) {
+            console.error(`Error al guardar archivo completo (finalizado) ${fileId}:`, saveError);
+            tempChunksStorage.delete(fileId.toString()); // Limpiar si falla
+            return { success: false, error: saveError.message || 'Error al guardar archivo finalizado' };
+        }
+    },
+    // <<--- FIN DE LA NUEVA FUNCIÓN --->>
 };
 
 // Iniciar limpieza automática periódica del almacenamiento temporal
