@@ -5,6 +5,7 @@ Thumbs.db
 # Archivos de configuración local y secretos
 # ¡¡¡MUY IMPORTANTE!!!
 .env
+.env.local
 .env.*
 !.env.example # Puedes descomentar esto si tienes un .env.example que SÍ quieres subir
 
