@@ -3,7 +3,7 @@
 ¡Bienvenido a Yappers! Una aplicación web moderna y dinámica para chatear en tiempo real con otros usuarios. Construida con Node.js, Express, Socket.IO y MongoDB.
 
 ![Chat Screenshot](https://via.placeholder.com/600x300.png?text=Imagen+del+Chat+Aqu%C3%AD)
-*(Reemplaza la URL de arriba con una captura de pantalla real de tu aplicación)*
+*(Reemplaza la URL de arriba con una captura de pantalla real de tu aplicaciónn)*
 
 ---
 
@@ -91,22 +91,8 @@ Sigue estos pasos para poner en marcha la aplicación en tu entorno local:
 
 ---
 
-## 🤝 Contribuciones
-
-¡Las contribuciones son bienvenidas! Si deseas mejorar la aplicación:
-
-1.  Haz un Fork del repositorio.
-2.  Crea una nueva rama (`git checkout -b feature/nueva-funcionalidad`).
-3.  Realiza tus cambios y haz commit (`git commit -m 'Añadir nueva funcionalidad'`).
-4.  Haz Push a la rama (`git push origin feature/nueva-funcionalidad`).
-5.  Abre un Pull Request.
-
----
-
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles (si existe).
 
 ---
-
-Hecho con ❤️ por [Tu Nombre/Usuario] 
