@@ -68,7 +68,6 @@ const authController = {
                 username,
                 email: email.toLowerCase(),
                 password,
-                emailVerified: true, // Por defecto, todos los usuarios ahora están verificados
                 role: 'user'
             });
             
@@ -385,12 +384,16 @@ const userController = {
     // Buscar usuario por su Google ID
     async findUserByGoogleId(googleId) {
         try {
-            console.log(`Buscando usuario con googleId: ${googleId}`);
             const user = await User.findOne({ googleId });
-            console.log(`Usuario encontrado: ${user ? user.username : 'No encontrado'}`);
+            console.log(`Buscando usuario con googleId: ${googleId}`);
+            if (user) {
+                console.log(`Usuario encontrado: ${user.username}`);
+            } else {
+                console.log('Usuario encontrado: No encontrado');
+            }
             return user;
         } catch (error) {
-            console.error(`Error al buscar usuario por Google ID: ${error}`);
+            console.error(`Error al buscar usuario por Google ID ${googleId}:`, error);
             throw error;
         }
     },
@@ -494,7 +497,6 @@ const userController = {
                 password: userData.password, // Ya debe venir encriptada o ser aleatoria
                 googleId: userData.googleId,
                 image: userData.image,
-                emailVerified: true,
                 role: 'user'
             });
             
@@ -506,6 +508,25 @@ const userController = {
             throw error;
         }
     },
+
+    // <<< NUEVA FUNCIÓN >>>
+    async findUserByEmail(email) {
+        try {
+            if (!email) return null; // No buscar si no hay email
+            const user = await User.findOne({ email: email.toLowerCase() });
+            console.log(`Buscando usuario con email: ${email}`);
+            if (user) {
+                console.log(`Usuario encontrado por email: ${user.username} (ID: ${user._id})`);
+            } else {
+                console.log('Usuario no encontrado por email.');
+            }
+            return user;
+        } catch (error) {
+            console.error(`Error al buscar usuario por email ${email}:`, error);
+            throw error;
+        }
+    },
+    // <<< FIN NUEVA FUNCIÓN >>>
 };
 
 // Controladores para mensajes

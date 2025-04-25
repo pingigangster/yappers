@@ -252,14 +252,6 @@ socket.on('connectionSuccess', (data) => {
             profileContainer.prepend(profileImg);
         }
     }
-    
-    // Mostrar indicador si es un usuario autenticado
-    if (data.isAuthenticated) {
-        if (usernameDisplay) {
-            // Añadir un icono de verificación junto al nombre
-            usernameDisplay.innerHTML += ' <i class="fas fa-check-circle" style="color: #2ecc71; font-size: 14px;" title="Usuario verificado"></i>';
-        }
-    }
 });
 
 // Unirse al chat (ahora con una secuencia específica y más logs)

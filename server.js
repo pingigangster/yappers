@@ -355,42 +355,58 @@ app.get('/api/auth/google',
 );
 
 app.get('/api/auth/google/callback', 
-    (req, res, next) => { // <<< AÑADIR ESTE MIDDLEWARE PRIMERO >>>
+    (req, res, next) => { // Logging middleware (sin cambios)
         console.log(`[Google Callback ROUTE ENTRY] Request received for URL: ${req.originalUrl} from IP: ${req.ip}`);
-        next(); // Pasar control al siguiente middleware
+        next();
     },
-    passport.authenticate('google', { // Passport corre después
-        failureRedirect: '/login.html',
-        session: false // No usamos sesiones de Passport, usamos JWT
-    }),
-    async (req, res) => { // Tu manejador corre si Passport tiene éxito
-        // <<< Log para saber que este middleware se ejecutó >>>
-        console.log(`[Google Callback] Middleware ejecutado para usuario: ${req.user?.username || 'desconocido'}`);
+    // <<< MODIFICAR CÓMO SE LLAMA PASSPORT.AUTHENTICATE >>>
+    (req, res, next) => { // Middleware intermedio para manejar el resultado de Passport
+        passport.authenticate('google', { 
+            session: false // Mantener sin sesión
+            // Quitar failureRedirect para manejarlo manualmente
+        }, (err, user, info) => { // Función callback de Passport
+            if (err) { 
+                console.error('[Google Callback] Error devuelto por Passport:', err);
+                return res.redirect('/login.html?error=google_internal_error');
+            }
+            // SI HAY UN MENSAJE DE INFORMACIÓN (nuestro caso de conflicto)
+            if (!user && info && info.message) { 
+                console.log(`[Google Callback] Fallo de autenticación con mensaje: ${info.message}`);
+                // Redirigir a login con el mensaje como parámetro (codificado)
+                const encodedMessage = encodeURIComponent(info.message);
+                return res.redirect(`/login.html?error=${encodedMessage}`);
+            }
+            // Si el usuario no existe por otra razón (poco probable aquí)
+            if (!user) {
+                console.log('[Google Callback] Fallo de autenticación sin usuario y sin mensaje específico.');
+                return res.redirect('/login.html?error=google_unknown_error');
+            }
+            // Si la autenticación es exitosa, pasar el usuario al siguiente middleware
+            req.user = user; 
+            next();
+        })(req, res, next); // ¡Importante invocar el middleware devuelto por passport.authenticate!
+    },
+    // <<< FIN DE LA MODIFICACIÓN DE PASSPORT.AUTHENTICATE >>>
+    
+    // Tu manejador original (ahora solo se ejecuta si Passport tuvo éxito)
+    async (req, res) => { 
+        console.log(`[Google Callback] Middleware ASYNC ejecutado para usuario: ${req.user?.username || 'desconocido (ERROR)'}`);
+        // <<< El resto de este bloque async (req, res) permanece igual >>>
         try {
             const loginResult = await authController.loginWithGoogle(req.user);
-            
-            // <<< Log antes de la cookie >>>
             console.log(`[Google Callback] Token generado: ${loginResult.token.substring(0,15)}...`);
-
             res.cookie('token', loginResult.token, {
                 httpOnly: true,
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+                maxAge: 7 * 24 * 60 * 60 * 1000, 
                 secure: process.env.NODE_ENV === 'production'
             });
-            
-            // <<< Log ANTES de la redirección >>>
             const redirectUrl = `/chat.html?token=${loginResult.token}`;
-            console.log(`[Google Callback] Intentando redirigir a: ${redirectUrl.substring(0, 30)}... (token completo en URL)`);
-            
+            console.log(`[Google Callback] Intentando redirigir a: ${redirectUrl.substring(0, 30)}...`);
             res.redirect(redirectUrl);
-            
-            // <<< Log DESPUÉS de llamar a redirect (puede que no se vea si la redirección es inmediata) >>>
             console.log(`[Google Callback] Redirección llamada.`);
-
         } catch (error) {
-            // <<< Log en caso de error >>>
-            console.error('[Google Callback] Error DENTRO del middleware:', error);
-            res.redirect('/login.html?error=google_callback_error');
+            console.error('[Google Callback] Error DENTRO del middleware ASYNC:', error);
+            res.redirect('/login.html?error=google_processing_error');
         }
     }
 );
@@ -1136,7 +1152,6 @@ io.on('connection', async (socket) => {
                 socketId: socket.id,
                 username: username,
                 userId: userId,
-                isAuthenticated: true, // Todos los usuarios ahora están autenticados
                 userImage: createdUser.image || null // Enviar imagen de perfil si existe
             });
             

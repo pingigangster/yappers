@@ -458,6 +458,38 @@
                 }
             });
         });
+
+        // <<< INICIO NUEVO SCRIPT PARA MOSTRAR ERRORES DE URL >>>
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const errorParam = urlParams.get('error');
+
+            if (errorParam) {
+                // Decodificar el mensaje de error
+                const decodedMessage = decodeURIComponent(errorParam);
+                
+                // Determinar el tipo de alerta (opcional, podríamos hacer esto más sofisticado)
+                let alertType = 'danger'; 
+                if (decodedMessage.includes('éxito')) { // Ejemplo si quisiéramos mostrar éxito
+                    alertType = 'success';
+                }
+
+                // Reutilizar la función showAlert existente en este archivo
+                const alertDiv = document.getElementById('alert');
+                const showAlertFunc = (message, type = 'danger') => {
+                    alertDiv.textContent = message;
+                    alertDiv.className = `alert alert-${type}`;
+                    alertDiv.style.display = 'block';
+                    setTimeout(() => { alertDiv.style.display = 'none'; }, 5000);
+                };
+
+                showAlertFunc(decodedMessage, alertType);
+
+                // Limpiar el parámetro de error de la URL para que no se muestre si se recarga
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
+        // <<< FIN NUEVO SCRIPT >>>
     </script>
 </body>
 </html> 

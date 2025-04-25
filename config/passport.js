@@ -31,33 +31,60 @@ passport.use(new GoogleStrategy({
     passReqToCallback: true
 }, async (req, accessToken, refreshToken, profile, done) => {
     try {
-        // Buscar si el usuario ya existe
+        // 1. Buscar si el usuario ya existe POR GOOGLE ID
         let user = await userController.findUserByGoogleId(profile.id);
         
         if (user) {
-            // Si el usuario existe, actualizar información
-            console.log(`Usuario de Google encontrado: ${user.username}`);
+            // Si existe por Google ID, autenticarlo directamente
+            console.log(`Usuario de Google encontrado por ID: ${user.username}`);
             return done(null, user);
         }
+
+        // 2. SI NO existe por Google ID, VERIFICAR POR EMAIL
+        const googleEmail = profile.emails && profile.emails[0] ? profile.emails[0].value.toLowerCase() : null;
+        if (googleEmail) {
+            console.log(`Google ID no encontrado. Verificando si existe usuario con email: ${googleEmail}`);
+            const existingUserByEmail = await userController.findUserByEmail(googleEmail);
+
+            if (existingUserByEmail) {
+                // Encontramos un usuario con ese email.
+                // VERIFICAR SI TIENE GOOGLE ID:
+                if (!existingUserByEmail.googleId) {
+                    // ¡CONFLICTO! El usuario existe pero se registró localmente (sin Google ID).
+                    console.warn(`Conflicto: Email ${googleEmail} ya registrado localmente. Bloqueando login/registro con Google.`);
+                    return done(null, false, { message: 'Ya existe una cuenta registrada con este correo electrónico usando contraseña. Por favor, inicia sesión con tu contraseña.' });
+                } else {
+                    // El usuario existe por email Y TAMBIÉN tiene un Google ID (aunque diferente al actual? Raro, pero lo logueamos)
+                    // Esto podría pasar si cambiaron su Google ID pero no el email. Lo ideal sería actualizar el Google ID aquí.
+                    console.warn(`Advertencia: Usuario encontrado por email (${googleEmail}) pero su Google ID (${existingUserByEmail.googleId}) no coincidía con el actual (${profile.id}). Logueando de todas formas.`);
+                     // Opcional: Actualizar el googleId si se desea
+                    // existingUserByEmail.googleId = profile.id;
+                    // await existingUserByEmail.save();
+                    return done(null, existingUserByEmail); 
+                }
+            }
+        }
         
-        // Si no existe, crear un nuevo usuario
-        console.log(`Nuevo usuario de Google: ${profile.displayName}`);
+        // 3. SI NO existe ni por Google ID ni por Email, CREAR NUEVO USUARIO vinculado a Google
+        console.log(`Nuevo usuario de Google: ${profile.displayName}. Email: ${googleEmail}`);
         
         // Crear datos de usuario
         const userData = {
             googleId: profile.id,
             username: profile.displayName || `user_${profile.id.substring(0, 8)}`,
-            email: profile.emails && profile.emails[0] ? profile.emails[0].value : null,
-            password: new mongoose.Types.ObjectId().toString(), // Generar una contraseña aleatoria
+            email: googleEmail,
+            password: new mongoose.Types.ObjectId().toString(), 
             role: 'user',
-            image: profile.photos && profile.photos[0] ? profile.photos[0].value : null
+            image: profile.photos && profile.photos[0] ? profile.photos[0].value : null,
         };
         
         // Crear nuevo usuario
         const newUser = await userController.createGoogleUser(userData);
+        console.log(`Nuevo usuario de Google creado: ${newUser.username}`);
         return done(null, newUser);
+
     } catch (error) {
-        console.error('Error en autenticación con Google:', error);
+        console.error('Error en la estrategia de autenticación con Google:', error);
         return done(error, null);
     }
 }));
