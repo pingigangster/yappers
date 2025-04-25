@@ -328,22 +328,67 @@ function checkAuthToken() {
     // Comprobar si hay un token en la URL (viene de autenticación con Google)
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
-    
+    let isNewTokenFromUrl = false; // Flag to indicate if we got a new token
+
     if (urlToken) {
-        console.log('Token nuevo encontrado en la URL');
+        console.log('Token nuevo encontrado en la URL, guardando y limpiando URL.');
         localStorage.setItem('token', urlToken);
         
         // Actualizar la variable global
         window.token = urlToken;
+        isNewTokenFromUrl = true; // Mark that we got a new token
         
         // Limpiar la URL (opcional)
         window.history.replaceState({}, document.title, '/chat.html');
-        
-        return urlToken;
     }
     
-    // Devolver el token existente
-    return window.token || localStorage.getItem('token');
+    // Devolver el token existente (ya sea de la URL o de localStorage)
+    const currentToken = window.token || localStorage.getItem('token');
+
+    // *** NUEVO: Si acabamos de obtener un token de la URL, iniciar conexión ***
+    if (isNewTokenFromUrl && currentToken) {
+        console.log('Iniciando conexión de chat con el nuevo token de la URL...');
+        // Asegurarse de que el socket esté conectado o intentando conectar
+        if (socket.disconnected) {
+            socket.connect();
+        }
+        // Emitir joinChat una vez conectado (o si ya lo estaba)
+        // Es importante esperar a la conexión si estaba desconectado
+        if (socket.connected) {
+             socket.emit('joinChat', { token: currentToken, isFirstVisit: true });
+             console.log('Evento joinChat enviado inmediatamente con token de URL.');
+        } else {
+            socket.once('connect', () => {
+                socket.emit('joinChat', { token: currentToken, isFirstVisit: true });
+                console.log('Evento joinChat enviado tras conexión con token de URL.');
+            });
+        }
+    }
+
+    return currentToken;
+}
+
+// Al inicio, obtener el token y si no existe, redirigir a login
+const initialToken = checkAuthToken();
+if (!initialToken) {
+    console.log('No se encontró token inicial, redirigiendo a login.');
+    window.location.href = '/index.html'; // O '/login.html'
+} else {
+    // Si ya hay un token (de localStorage, no de URL), emitir joinChat aquí
+    // Esto cubre el caso de recargar la página cuando ya estabas logueado
+    // Asegurarse de no emitir dos veces si ya se hizo por token de URL
+    if (!new URLSearchParams(window.location.search).has('token') && socket.connected) {
+         console.log('Token encontrado en localStorage, iniciando conexión de chat...');
+         socket.emit('joinChat', { token: initialToken, isFirstVisit: false });
+         console.log('Evento joinChat enviado con token de localStorage.');
+    } else if (!new URLSearchParams(window.location.search).has('token') && socket.disconnected) {
+        socket.once('connect', () => {
+            console.log('Token encontrado en localStorage, iniciando conexión de chat tras conexión de socket...');
+            socket.emit('joinChat', { token: initialToken, isFirstVisit: false });
+            console.log('Evento joinChat enviado tras conexión con token de localStorage.');
+        });
+        socket.connect(); // Asegurarse de conectar si estaba desconectado
+    }
 }
 
 // Añadir un evento para reconexiones por si se pierde la conexión

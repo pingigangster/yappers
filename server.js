@@ -75,20 +75,25 @@ app.use((req, res, next) => {
 
 // Middleware para proteger rutas que requieren autenticación
 function authMiddleware(req, res, next) {
+    // <<< Log de entrada al middleware >>>
+    console.log(`[Auth Middleware] Verificando ruta: ${req.path}`);
     try {
         let token = null;
+        let source = 'ninguna';
         
-        // Intentar obtener el token de las cookies
         if (req.cookies && req.cookies.token) {
             token = req.cookies.token;
-        }
-        // Si no está en las cookies, buscar en el header Authorization
-        else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+            source = 'cookie';
+        } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
             token = req.headers.authorization.split(' ')[1];
+            source = 'header';
         }
         
+        // <<< Log del token encontrado >>>
+        console.log(`[Auth Middleware] Token encontrado en ${source}. Token (primeros 15): ${token ? token.substring(0,15)+'...' : 'No encontrado'}`);
+
         if (!token) {
-            console.log('Acceso denegado: No se encontró token');
+            console.log('[Auth Middleware] Acceso denegado: No se encontró token');
             return res.status(401).json({ 
                 success: false, 
                 message: 'Acceso denegado: No se encontró token' 
@@ -350,28 +355,42 @@ app.get('/api/auth/google',
 );
 
 app.get('/api/auth/google/callback', 
-    passport.authenticate('google', { 
+    (req, res, next) => { // <<< AÑADIR ESTE MIDDLEWARE PRIMERO >>>
+        console.log(`[Google Callback ROUTE ENTRY] Request received for URL: ${req.originalUrl} from IP: ${req.ip}`);
+        next(); // Pasar control al siguiente middleware
+    },
+    passport.authenticate('google', { // Passport corre después
         failureRedirect: '/login.html',
-        session: false
+        session: false // No usamos sesiones de Passport, usamos JWT
     }),
-    async (req, res) => {
+    async (req, res) => { // Tu manejador corre si Passport tiene éxito
+        // <<< Log para saber que este middleware se ejecutó >>>
+        console.log(`[Google Callback] Middleware ejecutado para usuario: ${req.user?.username || 'desconocido'}`);
         try {
-            // req.user contiene el usuario autenticado por Google
             const loginResult = await authController.loginWithGoogle(req.user);
             
-            // Establecer cookie con el token JWT
+            // <<< Log antes de la cookie >>>
+            console.log(`[Google Callback] Token generado: ${loginResult.token.substring(0,15)}...`);
+
             res.cookie('token', loginResult.token, {
                 httpOnly: true,
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-                // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
                 secure: process.env.NODE_ENV === 'production'
             });
             
-            // Redirigir a la página de chat con el token como parámetro de URL
-            res.redirect(`/chat.html?token=${loginResult.token}`);
+            // <<< Log ANTES de la redirección >>>
+            const redirectUrl = `/chat.html?token=${loginResult.token}`;
+            console.log(`[Google Callback] Intentando redirigir a: ${redirectUrl.substring(0, 30)}... (token completo en URL)`);
+            
+            res.redirect(redirectUrl);
+            
+            // <<< Log DESPUÉS de llamar a redirect (puede que no se vea si la redirección es inmediata) >>>
+            console.log(`[Google Callback] Redirección llamada.`);
+
         } catch (error) {
-            console.error('Error en callback de Google:', error);
-            res.redirect('/login.html?error=google_auth');
+            // <<< Log en caso de error >>>
+            console.error('[Google Callback] Error DENTRO del middleware:', error);
+            res.redirect('/login.html?error=google_callback_error');
         }
     }
 );

@@ -146,108 +146,74 @@
         }
     </style>
     <script>
-        // Inicializar variables globales de usuario
+        // Variables globales que serán manejadas por main.js
         window.username = null;
         window.token = null;
         
-        // Verificar autenticación al cargar la página
-        document.addEventListener('DOMContentLoaded', function() {
-            // Comprobar si hay un token en la URL (viene de autenticación con Google)
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlToken = urlParams.get('token');
-            
-            if (urlToken) {
-                console.log('Token encontrado en la URL');
-                localStorage.setItem('token', urlToken);
-                
-                // Actualizar también la variable global
-                window.token = urlToken;
-                
-                // Limpiar la URL inmediatamente para proteger el token
-                window.history.replaceState({}, document.title, '/chat.html');
+        // Variables de la pantalla de carga
+        const loadingScreen = document.getElementById('loading-screen');
+        const progressBar = document.getElementById('progress-bar');
+        const loadingStatus = document.getElementById('loading-status');
+        const chatContainer = document.getElementById('chat-container');
+        
+        // Función para actualizar el progreso
+        window.updateLoadingProgress = function(percent, statusText) {
+            console.log(`Actualización de progreso: ${percent}% - ${statusText}`);
+            progressBar.style.width = `${percent}%`;
+            if (statusText) {
+                loadingStatus.textContent = statusText;
             }
             
-            // Obtener usuario desde localStorage
-            const storedUser = localStorage.getItem('user');
-            const storedToken = localStorage.getItem('token');
-            
-            // Verificar que exista token
-            if (!storedToken) {
-                console.error('No se encontró token de autenticación');
-                alert('Sesión no válida. Por favor, inicie sesión nuevamente.');
-                window.location.href = 'login.html';
-                return;
+            // Si llega al 100%, después de un breve retraso, ocultar la pantalla de carga
+            if (percent >= 100) {
+                setTimeout(() => {
+                    console.log('Carga completada, mostrando interfaz...');
+                    loadingScreen.classList.add('hidden');
+                    chatContainer.classList.add('loaded');
+                }, 500);
             }
-            
-            // Si no hay datos de usuario pero tenemos un token (caso Google OAuth)
-            if (!storedUser) {
-                console.log('No se encontraron datos de usuario en localStorage, pero hay un token. Obteniendo datos del usuario...');
-                
-                // Configurar mensaje de carga
-                document.getElementById('loading-status').textContent = 'Obteniendo datos de usuario...';
-                
-                // Intentar obtener los datos de usuario del servidor
-                fetch('/api/auth/me', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${storedToken}`
-                    },
-                    credentials: 'include' // Incluir cookies
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Error al obtener datos del usuario');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success && data.user) {
-                        // Guardar usuario en localStorage
-                        localStorage.setItem('user', JSON.stringify(data.user));
-                        
-                        // Asignar a variables globales
-                        window.username = data.user.username;
-                        window.token = storedToken;
-                        
-                        console.log(`Inicialización exitosa para: ${window.username}`);
-                        
-                        // Variables de usuario establecidas correctamente
-                        document.getElementById('loading-status').textContent = 'Conectando al servidor...';
-                    } else {
-                        throw new Error('Datos de usuario inválidos');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error al obtener datos del usuario:', error);
-                    alert('Error al obtener datos del usuario. Por favor, inicie sesión nuevamente.');
-                    window.location.href = 'login.html';
+        };
+        
+        // Script de inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            // Validar que los elementos existan
+            console.log('Interfaz cargada. Verificando elementos...');
+            const fileInput = document.getElementById('media-upload');
+            if (fileInput) {
+                console.log('Input de archivo encontrado');
+                fileInput.addEventListener('click', () => {
+                    console.log('Click en input de archivo');
                 });
-                return;
+            } else {
+                console.error('¡ERROR! Input de archivo no encontrado');
             }
             
-            try {
-                // Parsear usuario desde localStorage
-                const user = JSON.parse(storedUser);
-                
-                // Verificar que el usuario tenga username
-                if (!user || !user.username) {
-                    throw new Error('Datos de usuario incompletos');
+            // Iniciar con la pantalla de carga
+            window.updateLoadingProgress(10, 'Preparando conexión...');
+            
+            // Verificar que Socket.io esté disponible
+            window.socketCheck = function() {
+                console.log('Verificando disponibilidad de Socket.io...');
+                if (typeof io === 'undefined') {
+                    console.error('Socket.io no está cargado, reintentando en 1 segundo...');
+                    window.updateLoadingProgress(15, 'Error al conectar con el servidor, reintentando...');
+                    setTimeout(window.socketCheck, 1000);
+                } else {
+                    console.log('Socket.io disponible, inicialización continuará en main.js');
+                    window.updateLoadingProgress(20, 'Socket.io disponible, continuando...');
                 }
-                
-                // Asignar a variables globales
-                window.username = user.username;
-                window.token = storedToken;
-                
-                console.log(`Inicialización exitosa para: ${window.username}`);
-                
-                // Variables de usuario establecidas correctamente
-                document.getElementById('loading-status').textContent = 'Conectando al servidor...';
-            } catch (error) {
-                console.error('Error al procesar datos de usuario:', error);
-                alert('Error al procesar los datos de usuario. Por favor, inicie sesión nuevamente.');
-                window.location.href = 'login.html';
-            }
+            };
+            
+            // Iniciar verificación de socket
+            window.socketCheck();
+            
+            // Agregar un failsafe para evitar que se quede cargando indefinidamente
+            setTimeout(() => {
+                if (loadingScreen && !loadingScreen.classList.contains('hidden')) {
+                    console.error('Forzando mostrar chat después de 10 segundos por timeout');
+                    window.updateLoadingProgress(100, 'Error al cargar, continuando de todos modos...');
+                }
+            }, 10000);
         });
     </script>
 </head>
@@ -333,110 +299,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.11.2/qs.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script>
-        // Variables globales para almacenar información del usuario
-        let username = null;
-        let token = null;
-        let userObj = null;
-        
-        // Obtener token y datos de usuario desde localStorage
-        const storedUser = localStorage.getItem('user');
-        const storedToken = localStorage.getItem('token');
-        
-        // Verificar si hay un usuario almacenado y es válido
-        if (storedUser && storedToken) {
-            try {
-                userObj = JSON.parse(storedUser);
-                token = storedToken;
-                
-                // Verificación adicional para asegurarse de que el objeto de usuario tenga la estructura correcta
-                if (!userObj || !userObj.username) {
-                    console.error('Datos de usuario incompletos o inválidos, redirigiendo a login');
-                    window.location.href = 'login.html';
-                } else {
-                    console.log('Usuario autenticado:', userObj.username);
-                    username = userObj.username;
-                    
-                    // Establecer nombre para usar en main.js
-                    window.username = username;
-                    window.token = token;
-                }
-            } catch (e) {
-                console.error('Error al parsear usuario almacenado:', e);
-                window.location.href = 'login.html';
-            }
-        } else {
-            // Si no hay usuario autenticado, redirigir a la página de login
-            console.log('No hay usuario autenticado, redirigiendo a página de login');
-            window.location.href = 'login.html';
-        }
-        
-        // Variables de la pantalla de carga
-        const loadingScreen = document.getElementById('loading-screen');
-        const progressBar = document.getElementById('progress-bar');
-        const loadingStatus = document.getElementById('loading-status');
-        const chatContainer = document.getElementById('chat-container');
-        
-        // Función para actualizar el progreso
-        window.updateLoadingProgress = function(percent, statusText) {
-            console.log(`Actualización de progreso: ${percent}% - ${statusText}`);
-            progressBar.style.width = `${percent}%`;
-            if (statusText) {
-                loadingStatus.textContent = statusText;
-            }
-            
-            // Si llega al 100%, después de un breve retraso, ocultar la pantalla de carga
-            if (percent >= 100) {
-                setTimeout(() => {
-                    console.log('Carga completada, mostrando interfaz...');
-                    loadingScreen.classList.add('hidden');
-                    chatContainer.classList.add('loaded');
-                }, 500);
-            }
-        };
-        
-        // Script de inicialización
-        window.addEventListener('DOMContentLoaded', () => {
-            // Validar que los elementos existan
-            console.log('Interfaz cargada. Verificando elementos...');
-            const fileInput = document.getElementById('media-upload');
-            if (fileInput) {
-                console.log('Input de archivo encontrado');
-                fileInput.addEventListener('click', () => {
-                    console.log('Click en input de archivo');
-                });
-            } else {
-                console.error('¡ERROR! Input de archivo no encontrado');
-            }
-            
-            // Iniciar con la pantalla de carga
-            window.updateLoadingProgress(10, 'Preparando conexión...');
-            
-            // Verificar que Socket.io esté disponible
-            window.socketCheck = function() {
-                console.log('Verificando disponibilidad de Socket.io...');
-                if (typeof io === 'undefined') {
-                    console.error('Socket.io no está cargado, reintentando en 1 segundo...');
-                    window.updateLoadingProgress(15, 'Error al conectar con el servidor, reintentando...');
-                    setTimeout(window.socketCheck, 1000);
-                } else {
-                    console.log('Socket.io disponible, inicialización continuará en main.js');
-                    window.updateLoadingProgress(20, 'Socket.io disponible, continuando...');
-                }
-            };
-            
-            // Iniciar verificación de socket
-            window.socketCheck();
-            
-            // Agregar un failsafe para evitar que se quede cargando indefinidamente
-            setTimeout(() => {
-                if (loadingScreen && !loadingScreen.classList.contains('hidden')) {
-                    console.error('Forzando mostrar chat después de 10 segundos por timeout');
-                    window.updateLoadingProgress(100, 'Error al cargar, continuando de todos modos...');
-                }
-            }, 10000);
-        });
-    </script>
     <script src="js/main.js"></script>
     <script>
         // Inicializar selector de emojis
