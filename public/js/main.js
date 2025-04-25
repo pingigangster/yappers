@@ -986,6 +986,18 @@ function handleMediaUploadInternal(file, text) {
         // Considerar todos los videos como archivos grandes para asegurar que se guarden en GridFS
         const isLargeFile = file.size > 15 * 1024 * 1024 || fileType === 'video';
         
+        // Separar el nombre de archivo y su extensión
+        const fileName = file.name;
+        let fileNameBase = fileName;
+        let fileExtension = '';
+        
+        // Buscar la última posición del punto para detectar la extensión
+        const lastDotIndex = fileName.lastIndexOf('.');
+        if (lastDotIndex > 0) { // Asegurarse que hay una extensión y no es un archivo que comienza con punto
+            fileNameBase = fileName.substring(0, lastDotIndex);
+            fileExtension = fileName.substring(lastDotIndex); // Incluye el punto
+        }
+        
         // Crear el mensaje temporal inmediatamente
         const tempDiv = document.createElement('div');
         tempDiv.classList.add('message', 'self', 'fade-in', 'uploading-message');
@@ -998,8 +1010,14 @@ function handleMediaUploadInternal(file, text) {
                 <div class="media-container">
                     <div class="file-container">
                         <div class="file-upload-info">
-                            <i class="fas fa-file-upload"></i>
-                            <p>Enviando "${escapeHTML(file.name)}" (${formatFileSize(file.size)})...</p>
+                            <div class="file-upload-header">
+                                <i class="fas fa-file-upload"></i>
+                                <strong>Subiendo archivo</strong>
+                            </div>
+                            <div class="file-details" style="width: 100%; max-width: none; padding: 5px 0;">
+                                <span class="file-name" style="max-width: none; width: auto; font-size: 13px; word-break: break-all; white-space: normal;">${escapeHTML(file.name)}</span>
+                                <span class="file-size">${formatFileSize(file.size)}</span>
+                            </div>
                             <div class="upload-status">0%</div>
                         </div>
                     </div>
@@ -2349,6 +2367,71 @@ document.head.insertAdjacentHTML('beforeend', `
         display: inline-block; /* Para que min-width tenga efecto */
         text-align: right; /* Opcional: alinear el texto a la derecha */
     }
+
+    /* --- NUEVO --- Estilos para el nombre de archivo */
+    .file-details .file-name {
+        display: block; /* Asegurar que ocupa su propia línea si es necesario */
+        max-width: 100%; /* No exceder el ancho del contenedor */
+        overflow: hidden; /* Ocultar el texto que desborda */
+        white-space: nowrap; /* Evitar que el texto pase a la siguiente línea */
+        text-overflow: ellipsis; /* Mostrar '...' al final del texto cortado */
+        vertical-align: middle; /* Alinear verticalmente con el icono si es necesario */
+    }
+    /* --- FIN NUEVO --- */
+
+    /* --- NUEVO --- Estilos para el párrafo del nombre de archivo DURANTE LA SUBIDA */
+    .file-upload-info {
+        width: 100%; /* Usar todo el ancho disponible */
+        display: flex;
+        flex-direction: column; /* Apilar elementos verticalmente */
+        align-items: flex-start; /* Alinear a la izquierda */
+    }
+    
+    .file-upload-info i {
+        margin-right: 8px;
+    }
+    
+    .file-upload-info p {
+        margin: 5px 0;
+        width: 100%; /* Usar todo el ancho del contenedor */
+        white-space: normal; /* Permitir saltos de línea */
+        word-break: break-word; /* Romper palabras largas si es necesario */
+        overflow-wrap: break-word; /* Asegurar que las palabras largas se ajusten */
+    }
+    
+    /* Contenedor especial para archivos subiendo */
+    .uploading-message .file-container {
+        min-width: 200px; /* Ancho mínimo garantizado */
+        max-width: 100%; /* No exceder el contenedor */
+        margin: 5px 0;
+        padding: 8px 10px;
+        background-color: rgba(0, 0, 0, 0.05); /* Fondo sutil */
+        border-radius: 8px;
+    }
+    
+    /* Asegurar que el ícono y el texto estén en la misma línea */
+    .file-upload-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+    
+    /* Ya no necesitamos estos estilos que podrían interferir */
+    .filename-base, .filename-ext {
+        display: inline;
+        max-width: none;
+        overflow: visible;
+        white-space: normal;
+    }
+    
+    /* Contenedor de barra de progreso */
+    .upload-status {
+        width: 100%;
+        margin-top: 8px;
+        text-align: right;
+        font-weight: bold;
+    }
+    /* --- FIN NUEVO --- */
 </style>
 `);
 
