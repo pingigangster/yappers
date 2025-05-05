@@ -269,7 +269,7 @@ setTimeout(() => {
         if (tokenParts.length !== 3) {
             console.error('Error: El token no tiene un formato JWT válido (debe tener 3 partes)');
             alert('Error: El token de sesión no tiene un formato válido. Por favor, inicie sesión nuevamente.');
-            window.location.href = 'login.html';
+            window.location.href = '/login'; // Modificado
             return;
         } else {
             console.log('Token con formato JWT válido encontrado');
@@ -287,7 +287,7 @@ setTimeout(() => {
     } else {
         console.error('Error: No se encontró un token JWT válido para la autenticación');
         alert('No se encontró un token válido o el formato es incorrecto. Por favor, inicie sesión nuevamente.');
-        window.location.href = 'login.html';
+        window.location.href = '/login'; // Modificado
         return;
     }
 }, 1000); // Pequeño retraso para mostrar la animación
@@ -330,8 +330,10 @@ function checkAuthToken() {
         window.token = urlToken;
         isNewTokenFromUrl = true; // Mark that we got a new token
         
-        // Limpiar la URL (opcional)
-        window.history.replaceState({}, document.title, '/chat.html');
+        // Limpiar la URL (opcional) - FORZAR a /chat
+        const targetPath = '/chat'; // <<-- Ruta explícita
+        console.log(`Limpiando URL: Reemplazando por "${targetPath}"`);
+        window.history.replaceState({}, document.title, targetPath); // <<-- Usar ruta explícita
     }
     
     // Devolver el token existente (ya sea de la URL o de localStorage)
@@ -364,7 +366,8 @@ function checkAuthToken() {
 const initialToken = checkAuthToken();
 if (!initialToken) {
     console.log('No se encontró token inicial, redirigiendo a login.');
-    window.location.href = '/index.html'; // O '/login.html'
+    console.log('URL de redirección: /login');
+    window.location.href = '/login'; // Modificado: asegurarse de no tener .html
 } else {
     // Si ya hay un token (de localStorage, no de URL), emitir joinChat aquí
     // Esto cubre el caso de recargar la página cuando ya estabas logueado
@@ -413,7 +416,8 @@ socket.on('forceDisconnect', (data) => {
     // Mostrar alerta antes de redireccionar
     alert(data.message || 'Tu cuenta ha sido eliminada por el administrador');
     // Redireccionar a la página de inicio
-    window.location.href = 'index.html';
+    console.log('URL de redirección: /login');
+    window.location.href = '/login'; // Modificado: asegurarse de no tener .html
 });
 
 // Escuchar por errores de inicio de sesión
@@ -422,7 +426,8 @@ socket.on('joinError', (data) => {
     // Mostrar alerta antes de redireccionar
     alert(data.message || 'Error al unirse al chat. Por favor, inténtalo de nuevo.');
     // Redireccionar a la página de inicio
-    window.location.href = 'index.html';
+    console.log('URL de redirección: /login');
+    window.location.href = '/login'; // Modificado: asegurarse de no tener .html
 });
 
 // Escuchar por mensajes de texto del servidor
@@ -2280,14 +2285,16 @@ function logout() {
         }
         
         // Redirigir a la página de inicio
-        window.location.href = 'index.html';
+        console.log('URL de redirección tras logout exitoso: /login');
+        window.location.href = '/login'; // Modificado: asegurarse de no tener .html
     })
     .catch(error => {
         console.error('Error al cerrar sesión:', error);
         // Incluso si hay error, limpiar localStorage y redirigir
         localStorage.removeItem('user');
         localStorage.removeItem('token');
-        window.location.href = 'index.html';
+        console.log('URL de redirección tras error en logout: /login');
+        window.location.href = '/login'; // Modificado: asegurarse de no tener .html
     });
 }
 

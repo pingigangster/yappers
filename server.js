@@ -367,19 +367,19 @@ app.get('/api/auth/google/callback',
         }, (err, user, info) => { // Función callback de Passport
             if (err) { 
                 console.error('[Google Callback] Error devuelto por Passport:', err);
-                return res.redirect('/login.html?error=google_internal_error');
+                return res.redirect('/login?error=google_internal_error');
             }
             // SI HAY UN MENSAJE DE INFORMACIÓN (nuestro caso de conflicto)
             if (!user && info && info.message) { 
                 console.log(`[Google Callback] Fallo de autenticación con mensaje: ${info.message}`);
                 // Redirigir a login con el mensaje como parámetro (codificado)
                 const encodedMessage = encodeURIComponent(info.message);
-                return res.redirect(`/login.html?error=${encodedMessage}`);
+                return res.redirect(`/login?error=${encodedMessage}`); // Modificado
             }
             // Si el usuario no existe por otra razón (poco probable aquí)
             if (!user) {
                 console.log('[Google Callback] Fallo de autenticación sin usuario y sin mensaje específico.');
-                return res.redirect('/login.html?error=google_unknown_error');
+                return res.redirect('/login?error=google_unknown_error'); // Modificado
             }
             // Si la autenticación es exitosa, pasar el usuario al siguiente middleware
             req.user = user; 
@@ -400,13 +400,14 @@ app.get('/api/auth/google/callback',
                 maxAge: 7 * 24 * 60 * 60 * 1000, 
                 secure: process.env.NODE_ENV === 'production'
             });
-            const redirectUrl = `/chat.html?token=${loginResult.token}`;
-            console.log(`[Google Callback] Intentando redirigir a: ${redirectUrl.substring(0, 30)}...`);
-            res.redirect(redirectUrl);
-            console.log(`[Google Callback] Redirección llamada.`);
+            const redirectUrl = `/chat?token=${loginResult.token}`; // Modificado: quitado .html
+            console.log(`[Google Callback] Intentando redirigir a: ${redirectUrl}`);
+            
+            // SOLUCIÓN DEFINITIVA: Usar res.redirect() y no manipular headers manualmente
+            return res.redirect(302, redirectUrl);
         } catch (error) {
             console.error('[Google Callback] Error DENTRO del middleware ASYNC:', error);
-            res.redirect('/login.html?error=google_processing_error');
+            res.redirect('/login?error=google_processing_error');
         }
     }
 );
@@ -421,8 +422,111 @@ const formatMessage = (username, userId, text) => {
     };
 };
 
-// Configurar carpeta estática
-app.use(express.static(path.join(__dirname, 'public')));
+// Middleware para redirigir URLs que terminan en .html a la versión sin extensión
+// IMPORTANTE: Este middleware debe estar ANTES de definir las rutas específicas
+app.use((req, res, next) => {
+    if (req.path.toLowerCase().endsWith('.html')) {
+        const pathWithoutExt = req.path.slice(0, -5); // Quitar '.html'
+        const queryString = Object.keys(req.query).length 
+            ? '?' + new URLSearchParams(req.query).toString() 
+            : '';
+        console.log(`[HTML Redirect Middleware] Redirigiendo ${req.path} a ${pathWithoutExt}${queryString}`);
+        return res.redirect(302, `${pathWithoutExt}${queryString}`);
+    }
+    next();
+});
+
+// --- Rutas para servir páginas HTML principales sin extensión --- 
+
+// Ruta específica para servir la página principal /
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Ruta específica para servir /login
+app.get('/login', (req, res) => {
+    // Comprobar si hay un token válido en las cookies
+    const token = req.cookies.token;
+    if (token) {
+        try {
+            // Verificar el token
+            jwt.verify(token, JWT_SECRET);
+            // Si el token es válido, redirigir al chat
+            console.log('[Ruta /login] Usuario ya autenticado, redirigiendo a /chat');
+            return res.redirect('/chat');
+        } catch (err) {
+            // Si el token es inválido o expirado, continuar y servir login.html
+            console.log('[Ruta /login] Token inválido o expirado, sirviendo login.html');
+            res.clearCookie('token'); // Limpiar la cookie inválida
+        }
+    }
+    // Si no hay token o es inválido, servir la página de login
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Ruta para redireccionar /login.html a /login (sin .html)
+app.get('/login.html', (req, res) => {
+    // Conservar los parámetros de consulta en la redirección
+    const queryString = Object.keys(req.query).length 
+        ? '?' + new URLSearchParams(req.query).toString() 
+        : '';
+    res.redirect(301, `/login${queryString}`);
+});
+
+// Ruta específica para servir /register
+app.get('/register', (req, res) => {
+    // Similar a /login, si ya está autenticado, redirigir al chat
+    const token = req.cookies.token;
+    if (token) {
+        try {
+            jwt.verify(token, JWT_SECRET);
+            console.log('[Ruta /register] Usuario ya autenticado, redirigiendo a /chat');
+            return res.redirect('/chat');
+        } catch (err) {
+            console.log('[Ruta /register] Token inválido o expirado, sirviendo register.html');
+            res.clearCookie('token');
+        }
+    }
+    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+// Ruta para redireccionar /register.html a /register (sin .html)
+app.get('/register.html', (req, res) => {
+    // Conservar los parámetros de consulta en la redirección
+    const queryString = Object.keys(req.query).length 
+        ? '?' + new URLSearchParams(req.query).toString() 
+        : '';
+    res.redirect(301, `/register${queryString}`);
+});
+
+// Ruta específica para servir /chat (SIN verificación de token aquí)
+app.get('/chat', (req, res) => {
+    // Simplemente servir el archivo HTML. La autenticación se maneja
+    // en el lado del cliente y en la conexión WebSocket.
+    res.sendFile(path.join(__dirname, 'public', 'chat.html'));
+});
+
+// Ruta para redireccionar /chat.html a /chat (sin .html)
+app.get('/chat.html', (req, res) => {
+    // Conservar los parámetros de consulta en la redirección
+    const queryString = Object.keys(req.query).length 
+        ? '?' + new URLSearchParams(req.query).toString() 
+        : '';
+    res.redirect(301, `/chat${queryString}`);
+});
+
+// Ruta para el panel de administrador (SIN verificación de token aquí)
+app.get('/admin', (req, res) => {
+    // Simplemente servir la página. La autenticación se hará en las llamadas API internas.
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// --- Fin de rutas para servir páginas HTML --- 
+
+// Configurar carpeta estática (¡IMPORTANTE: después de las rutas específicas!)
+app.use(express.static(path.join(__dirname, 'public'), {
+    index: false // Esto evita servir automáticamente index.html
+}));
 
 // Ruta para servir archivos almacenados en GridFS
 app.get('/api/files/:id', async (req, res) => {
@@ -634,6 +738,27 @@ app.get('/api/stream/:mediaId', async (req, res) => {
 
 // Rutas para el panel de administrador
 app.get('/admin', (req, res) => {
+    // <<-- Añadir verificación de token de admin aquí -->
+    const token = req.cookies.token;
+    let isAdmin = false;
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            if (decoded && decoded.role === 'admin') {
+                isAdmin = true;
+            }
+        } catch (err) {
+            // Ignorar token inválido
+        }
+    }
+    
+    if (!isAdmin) {
+        console.log('[Ruta /admin] Acceso denegado, redirigiendo a /login');
+        // Opcional: Redirigir a una página de login de admin específica si existe
+        return res.redirect('/login?error=admin_required'); 
+    }
+    
+    // Si es admin, servir la página
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
@@ -1932,4 +2057,17 @@ app.delete('/api/admin/users', (req, res) => {
     // Agregar la instancia io a la solicitud para que el controlador pueda usarla
     req.io = io;
     userController.deleteAllUsers(req, res);
-}); 
+});
+
+// Ruta comodín final - IMPORTANTE: debe ir después de todas las rutas específicas
+// Esta ruta captura cualquier acceso que aún contenga 'chat.html' y lo redirige a /chat
+app.use((req, res, next) => {
+    const url = req.url.toLowerCase();
+    if (url.includes('chat.html')) {
+        // Preservar parámetros de consulta
+        const queryParams = url.includes('?') ? url.substring(url.indexOf('?')) : '';
+        console.log(`[Último recurso] Redirigiendo solicitud con 'chat.html' a /chat${queryParams}`);
+        return res.redirect(301, `/chat${queryParams}`);
+    }
+    next();
+});

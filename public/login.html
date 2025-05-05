@@ -313,10 +313,6 @@
                 Por favor introduce tu contraseña
             </div>
             
-            <div class="forgot-password">
-                <a href="forgot-password.html">¿Olvidaste tu contraseña?</a>
-            </div>
-            
             <button type="submit">
                 <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
             </button>
@@ -331,7 +327,7 @@
         </a>
         
         <div class="switch-form">
-            ¿No tienes una cuenta? <a href="register.html">Regístrate</a>
+            ¿No tienes una cuenta? <a href="/register">Regístrate</a>
         </div>
     </div>
 
@@ -442,11 +438,11 @@
                             return;
                         }
                         
-                        console.log('Login exitoso, redirigiendo a chat.html...');
+                        console.log('Login exitoso, redirigiendo a /chat...');
                         
                         // Redirigir a chat después de 2 segundos
                         setTimeout(() => {
-                            window.location.href = 'chat.html';
+                            window.location.href = '/chat';
                         }, 2000);
                     } else {
                         // Error en el login
