@@ -760,15 +760,15 @@ const messageController = {
                 }
                 
                 return {
+                    _id: msg._id.toString(),
                     username: msg.username,
                     userId: msg.userId,
                     text: msg.text,
-                    time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    media: mediaUrl,
+                    time: moment(msg.createdAt).format('HH:mm'),
                     fileType: msg.fileType,
                     fileName: msg.fileName,
                     fileSize: msg.fileSize,
-                    isLargeFile: !!msg.mediaId,
+                    mediaId: msg.mediaId,
                     createdAt: msg.createdAt
                 };
             });

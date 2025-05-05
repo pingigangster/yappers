@@ -472,7 +472,7 @@ socket.on('historicalMessages', messages => {
             }
             
             // Añadir mensaje al DOM sin mostrar todavía
-            if (message.media) {
+            if (message.mediaId) { // <-- Usar mediaId para identificar mensajes multimedia
                 outputMediaMessage(message, false); // Pasar false para no hacer scroll todavía
             } else {
                 outputMessage(message, false); // Pasar false para no hacer scroll todavía
@@ -1088,7 +1088,6 @@ function handleMediaUploadInternal(file, text) {
         reader.onload = function(e) {
              console.log('Archivo leído como ArrayBuffer, enviando al servidor...');
              if (uploadStatus) uploadStatus.textContent = 'Enviando...';
-             if (uploadIcon) uploadIcon.classList.add('fa-spin'); 
 
              const fileBuffer = e.target.result; 
 
@@ -2025,6 +2024,44 @@ document.head.insertAdjacentHTML('beforeend', `
         font-weight: bold;
     }
     /* --- FIN NUEVO --- */
+
+    /* --- NUEVA ANIMACIÓN DE SUBIDA --- */
+    @keyframes pulse-background {
+      0% { background-color: rgba(0, 0, 0, 0.05); }
+      50% { background-color: rgba(0, 0, 0, 0.08); }
+      100% { background-color: rgba(0, 0, 0, 0.05); }
+    }
+
+    .uploading-message .file-upload-info {
+      /* Aplicar la animación de pulso al fondo */
+      animation: pulse-background 2s infinite ease-in-out;
+      padding: 8px; /* Añadir algo de padding para que se vea mejor el fondo */
+      border-radius: 5px;
+    }
+
+    /* Detener animación y cambiar fondo en caso de error */
+    .uploading-message.error .file-upload-info {
+      animation: none;
+      background-color: rgba(231, 76, 60, 0.1); /* Fondo rojo sutil para error */
+    }
+    /* --- FIN NUEVA ANIMACIÓN DE SUBIDA --- */
+
+    /* --- DEFINICIÓN DE ANIMACIÓN FA-SPIN (Fallback) --- */
+    /* Aumentar especificidad */
+    .uploading-message .fa-spin {
+      animation: fa-spin 1s infinite linear;
+    }
+
+    @keyframes fa-spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+    /* --- FIN DEFINICIÓN FA-SPIN --- */
+
 </style>
 `);
 
