@@ -45,6 +45,12 @@ const MessageSchema = new mongoose.Schema({
         default: false,
         required: false
     },
+    // Nuevo campo para identificar videos pequeños
+    isSmallVideo: {
+        type: Boolean,
+        default: false,
+        required: false
+    },
     fileType: {
         type: String,
         required: false,

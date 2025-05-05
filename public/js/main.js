@@ -1016,35 +1016,19 @@ function handleMediaUpload(file) {
     }
 }
 
-// Función interna que realmente procesa el archivo
+// Función interna que realmente procesa el archivo (MODIFICADA)
 function handleMediaUploadInternal(file, text) {
     try {
         console.log('Procesando archivo de tamaño:', formatFileSize(file.size));
         
-        // Determinar tipo de archivo inmediatamente (sin esperar)
         const fileType = getFileType(file);
         console.log('Tipo de archivo detectado:', fileType);
-        
-        // Considerar todos los videos como archivos grandes para asegurar que se guarden en GridFS
-        const isLargeFile = file.size > 15 * 1024 * 1024 || fileType === 'video';
-        
-        // Separar el nombre de archivo y su extensión
-        const fileName = file.name;
-        let fileNameBase = fileName;
-        let fileExtension = '';
-        
-        // Buscar la última posición del punto para detectar la extensión
-        const lastDotIndex = fileName.lastIndexOf('.');
-        if (lastDotIndex > 0) { // Asegurarse que hay una extensión y no es un archivo que comienza con punto
-            fileNameBase = fileName.substring(0, lastDotIndex);
-            fileExtension = fileName.substring(lastDotIndex); // Incluye el punto
-        }
-        
+
         // Crear el mensaje temporal inmediatamente
         const tempDiv = document.createElement('div');
         tempDiv.classList.add('message', 'self', 'fade-in', 'uploading-message');
         
-        // Agregar el contenido del mensaje temporal
+        // HTML simplificado para el estado de subida
         tempDiv.innerHTML = `
             <p class="meta">${escapeHTML(localUsername)} <span>${moment().format('HH:mm')}</span></p>
             <div class="content">
@@ -1053,697 +1037,116 @@ function handleMediaUploadInternal(file, text) {
                     <div class="file-container">
                         <div class="file-upload-info">
                             <div class="file-upload-header">
-                                <i class="fas fa-file-upload"></i>
+                                <i class="fas fa-spinner fa-spin"></i> <!-- Icono de carga -->
                                 <strong>Subiendo archivo</strong>
                             </div>
-                            <div class="file-details" style="width: 100%; max-width: none; padding: 5px 0;">
-                                <span class="file-name" style="max-width: none; width: auto; font-size: 13px; word-break: break-all; white-space: normal;">${escapeHTML(file.name)}</span>
+                            <div class="file-details">
+                                <span class="file-name">${escapeHTML(file.name)}</span>
                                 <span class="file-size">${formatFileSize(file.size)}</span>
                             </div>
-                            <div class="upload-status">0%</div>
+                            <div class="upload-status">Procesando...</div> <!-- Estado simple -->
                         </div>
                     </div>
                 </div>
             </div>
         `;
         
-        // Agregar al DOM inmediatamente
         document.querySelector('.chat-messages').appendChild(tempDiv);
-        
-        // Animar y hacer scroll inmediatamente
         tempDiv.classList.add('active');
         scrollToBottom();
         
-        // Referencias a elementos de progreso
         const uploadStatus = tempDiv.querySelector('.upload-status');
-        
-        console.log('Interfaz de carga preparada');
-        
-        // Función para manejar errores durante la carga
+        const uploadIcon = tempDiv.querySelector('.file-upload-header i');
+
         function handleUploadError(errorMessage) {
             console.error('Error en la carga:', errorMessage);
-            tempDiv.classList.add('error');
-            
-            // Actualizar mensaje de estado directamente
-            uploadStatus.textContent = errorMessage;
-            uploadStatus.classList.add('error-message');
-        }
-        
-        // Función para actualizar el progreso
-        function updateProgress(percent, statusText) {
-            console.log(`Progreso: ${percent}% - ${statusText || ''}`);
-            
-            if (uploadStatus) {
-                // Asegurarse de que percent es un número y redondearlo
-                const displayPercent = Math.round(Number(percent) || 0);
-                uploadStatus.textContent = `${displayPercent}%`;
-                
-                if (statusText) {
-                    // También podríamos mostrar texto adicional
-                    uploadStatus.setAttribute('title', statusText);
+            if (tempDiv) {
+                tempDiv.classList.add('error');
+                if (uploadStatus) uploadStatus.textContent = `Error: ${errorMessage}`;
+                if (uploadIcon) {
+                    uploadIcon.classList.remove('fa-spinner', 'fa-spin');
+                    uploadIcon.classList.add('fa-exclamation-triangle');
                 }
+                 setTimeout(() => {
+                     if (tempDiv && tempDiv.parentNode) {
+                         tempDiv.remove();
+                     }
+                 }, 5000);
             }
         }
         
-        // Función para completar la carga
         function completeUpload() {
-            console.log('Carga completada');
+            console.log('Carga completada en el cliente (mensaje temporal eliminado)');
             if (tempDiv) {
                 tempDiv.remove();
-                console.log('Mensaje temporal de subida eliminado.');
             }
-            
             showTransferNotification(`Archivo "${file.name}" subido correctamente`, 'success');
         }
-        
-        // Basado en el tamaño del archivo, elegir entre carga estándar o fragmentada
-        if (isLargeFile) {
-            console.log('Iniciando carga de archivo grande en fragmentos');
-            uploadLargeFile();
-        } else {
-            console.log('Iniciando carga de archivo estándar');
-            uploadRegularFile();
+
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+             console.log('Archivo leído como ArrayBuffer, enviando al servidor...');
+             if (uploadStatus) uploadStatus.textContent = 'Enviando...';
+             if (uploadIcon) uploadIcon.classList.add('fa-spin'); 
+
+             const fileBuffer = e.target.result; 
+
+             const messageData = {
+                 fileBuffer: fileBuffer,
+                 text: text,
+                 fileType: fileType,
+                 fileName: file.name,
+                 fileSize: file.size
+             };
+
+             const uploadTimeout = setTimeout(() => {
+                 handleUploadError('No se recibió respuesta del servidor. Inténtelo de nuevo.');
+             }, 120000);
+
+             socket.emit('mediaMessage', messageData, (response) => {
+                 clearTimeout(uploadTimeout); 
+                 console.log('Respuesta del servidor (mediaMessage - simple upload):', response);
+
+                 if (response && response.success && response.confirmedMessage) {
+                     completeUpload();
+                     console.log('Renderizando mensaje multimedia confirmado para el remitente');
+                     outputMediaMessage(response.confirmedMessage);
+                     scrollToBottom();
+                 } else {
+                     handleUploadError(response?.error || 'Error al procesar archivo en el servidor');
+                 }
+             });
+        };
+
+        reader.onerror = function(error) {
+            console.error('Error al leer archivo como ArrayBuffer:', error);
+            handleUploadError('Error al leer el archivo localmente');
+        };
+
+        try {
+             reader.readAsArrayBuffer(file);
+        } catch (error) {
+             console.error('Error al iniciar la lectura del archivo:', error);
+             handleUploadError('Error al iniciar la lectura del archivo');
         }
-        
-        // Función para cargar archivos pequeños
-        function uploadRegularFile() {
-            updateProgress(10, 'Iniciando carga de archivo...');
-            
-            // Actualizar progreso periódicamente para mostrar actividad
-            let fakePct = 10;
-            const progressInterval = setInterval(() => {
-                if (fakePct < 80) {
-                    fakePct += 5;
-                    updateProgress(fakePct, 'Procesando archivo...');
-                }
-            }, 250);
-            
-            // Verificar si es un video
-            const isVideo = (fileType === 'video');
-            
-            // Si es un video, usar uploadLargeFile en su lugar
-            if (isVideo) {
-                console.log('Detectado video, usando uploadLargeFile para procesarlo correctamente');
-                clearInterval(progressInterval);
-                uploadLargeFile();
-                return;
-            }
-            
-            // Crear FileReader para leer el archivo
-            const reader = new FileReader();
-            
-            // Manejar éxito en la lectura
-            reader.onload = function(e) {
-                console.log('Archivo leído correctamente, enviando al servidor');
-                clearInterval(progressInterval);
-                updateProgress(90, 'Enviando archivo al servidor...');
-                
-                // Preparar datos para enviar
-                const messageData = {
-                    media: e.target.result,
-                    text: text,
-                    fileType: fileType,
-                    fileName: file.name,
-                    fileSize: file.size
-                };
-                
-                // Para videos, asegurarse de que el tipo sea correcto
-                if (isVideo) {
-                    messageData.fileType = 'video';
-                    console.log('Configuración especial aplicada para video pequeño');
-                }
-                
-                // Establecer timeout para detectar problemas con el servidor
-                const uploadTimeout = setTimeout(() => {
-                    handleUploadError('No se recibió respuesta del servidor. Inténtelo de nuevo.');
-                }, 60000);
-                
-                // Enviar al servidor
-                socket.emit('mediaMessage', messageData, (response) => {
-                    console.log('Respuesta del servidor (mediaMessage):', response);
-                    clearTimeout(uploadTimeout);
-                    
-                    if (response && response.success) {
-                        updateProgress(100, '¡Archivo subido con éxito!');
-                        completeUpload(); // Esto elimina el mensaje temporal "subiendo..."
-                        
-                        // Renderizar el mensaje final para el remitente usando la info confirmada
-                        if (response.confirmedMessage) {
-                            console.log('Renderizando mensaje multimedia confirmado para el remitente');
-                            outputMediaMessage(response.confirmedMessage);
-                        } else {
-                            console.warn('Callback exitoso pero no se recibió confirmedMessage para renderizar');
-                        }
-                    } else {
-                        handleUploadError(response?.error || 'Error al enviar archivo');
-                    }
-                });
-            };
-            
-            // Manejar errores de lectura
-            reader.onerror = function(error) {
-                console.error('Error al leer archivo:', error);
-                clearInterval(progressInterval);
-                handleUploadError('Error al leer el archivo');
-            };
-            
-            // Iniciar la lectura del archivo
-            console.log('Iniciando lectura del archivo como data URL');
-            try {
-                reader.readAsDataURL(file);
-            } catch (error) {
-                console.error('Error al iniciar la lectura del archivo:', error);
-                clearInterval(progressInterval);
-                handleUploadError('Error al iniciar la lectura del archivo');
-            }
-        }
-        
-        // IMPLEMENTACIÓN REDISEÑADA para cargar archivos grandes
-        function uploadLargeFile() {
-            // Configuración básica
-            const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB por fragmento
-            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-            const MAX_PARALLEL_UPLOADS = 3; // Máximo de cargas paralelas
-            const uploadedChunks = new Set();
-            let currentChunk = 1; // Índice del siguiente chunk a procesar (empezamos desde 1 para la cola paralela)
-            
-            console.log(`Preparando carga fragmentada: ${totalChunks} fragmentos de ${formatFileSize(CHUNK_SIZE)}`);
-            updateProgress(5, `Preparando carga optimizada (${totalChunks} fragmentos)...`);
-            
-            // Generar ID único para esta sesión de carga
-            const sessionId = generateUniqueId();
-            
-            // Estructura de sesión de carga
-            const uploadSession = {
-                id: sessionId,
-                fileId: null, // <<--- Será establecido por el servidor
-                firstChunkConfirmed: false, // <<--- NUEVO FLAG
-                isFinalizing: false, // <<--- ADD THIS LINE
-                fileName: file.name,
-                fileType: fileType,
-                fileSize: file.size,
-                chunks: new Map(), // Mapa de chunks {index: {status, attempts, checksum}}
-                totalChunks: totalChunks,
-                activeUploads: 0,
-                lastActivity: Date.now()
-            };
-            
-            // Inicializar estado de chunks
-            for (let i = 0; i < totalChunks; i++) {
-                uploadSession.chunks.set(i, {
-                    status: 'pending',
-                    attempts: 0,
-                    checksum: null
-                });
-            }
-            
-            // Inicializar sesión en el servidor
-            initializeUploadSession();
-            
-            // Función para generar ID único
-            function generateUniqueId() {
-                return 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            }
-            
-            // Función para inicializar sesión en el servidor
-            function initializeUploadSession() {
-                console.log(`Inicializando sesión para archivo ${file.name} (${formatFileSize(file.size)})`);
-                updateProgress(5, 'Preparando sesión de carga...');
-                
-                // Timeout de seguridad para la inicialización - aumentado a 120 segundos para archivos grandes
-                const initTimeout = setTimeout(() => {
-                    console.log('Timeout al inicializar sesión después de 120 segundos');
-                    handleUploadError('Tiempo de espera agotado al inicializar la sesión. Por favor, verifique su conexión e inténtelo de nuevo.');
-                }, 120000); // 120 segundos (2 minutos) para archivos grandes
-                
-                // Agregar evento de confirmación para verificar que el socket está activo
-                let pingInterval = setInterval(() => {
-                    console.log("Verificando conexión con el servidor...");
-                    socket.emit('ping', {}, (response) => {
-                        if (response && response.success) {
-                            console.log("Conexión con servidor activa, esperando respuesta de inicialización...");
-                        } else {
-                            console.warn("Sin respuesta del servidor en ping");
-                        }
-                    });
-                }, 10000); // Cada 10 segundos
-                
-                socket.emit('initializeUpload', {
-                    sessionId: uploadSession.id,
-                    fileName: uploadSession.fileName,
-                    fileType: uploadSession.fileType,
-                    fileSize: uploadSession.fileSize,
-                    totalChunks: uploadSession.totalChunks,
-                    text: text // Texto asociado al archivo
-                }, response => {
-                    clearTimeout(initTimeout);
-                    clearInterval(pingInterval);
-                    
-                    if (response && response.success) {
-                        console.log(`Sesión de carga iniciada: ${response.sessionId}, fileId: ${response.fileId}`);
-                        uploadSession.fileId = response.fileId;
-                        
-                        updateProgress(10, 'Sesión iniciada, comenzando carga...');
-                        
-                        // Si el servidor reporta chunks ya existentes, actualizamos nuestro estado
-                        if (response.existingChunks && response.existingChunks.length > 0) {
-                            response.existingChunks.forEach(index => {
-                                const chunk = uploadSession.chunks.get(index);
-                                if (chunk) {
-                                    chunk.status = 'completed';
-                                    console.log(`Chunk ${index} ya existía en el servidor`);
-                                }
-                            });
-                            
-                            // Actualizar progreso con chunks ya existentes
-                            updateProgress(
-                                calculateProgress(),
-                                `Recuperados ${response.existingChunks.length} fragmentos previos`
-                            );
-                        }
-                        
-                        // Reiniciar currentChunk para asegurar que comienza desde el principio
-                        // currentChunk = 0; // No es necesario con la nueva lógica de búsqueda
-                        
-                        // Comenzar carga de chunks (ahora enviará solo el primero)
-                        uploadNextChunks();
-                        
-                        // Iniciar verificación periódica
-                        scheduleStatusCheck();
-                    } else {
-                        console.error('Error al inicializar la sesión:', response?.error);
-                        handleUploadError(`Error al inicializar sesión: ${response?.error || 'Error de conexión. Verifica tu conexión a internet y reintenta.'}`);
-                    }
-                });
-            }
-            
-            // Función para subir chunks disponibles según capacidad
-            function uploadNextChunks() {
-                // Si hemos alcanzado la capacidad máxima, salir
-                if (uploadSession.activeUploads >= MAX_PARALLEL_UPLOADS) return;
-                
-                // <<--- NUEVA LÓGICA --->>
-                if (!uploadSession.firstChunkConfirmed) {
-                    // Aún no hemos confirmado el primer chunk, solo intentarlo
-                    const firstChunk = uploadSession.chunks.get(0);
-                    if (firstChunk && firstChunk.status === 'pending' && uploadSession.activeUploads === 0) {
-                        console.log('Intentando enviar el primer fragmento...');
-                        uploadChunk(0);
-                    }
-                    // No enviar otros chunks hasta que el primero sea confirmado
-                    return;
-                }
-                // <<--- FIN NUEVA LÓGICA --->>
 
-                // Ya hemos confirmado el primer chunk, proceder con cargas paralelas
-                let uploadsStarted = 0;
-                
-                // Intentar cargar chunks pendientes hasta alcanzar el máximo
-                for (const [index, chunk] of uploadSession.chunks.entries()) {
-                    if (index === 0) continue; // Ya gestionamos el primero
+        // // Función para cargar archivos pequeños (ELIMINADA)
+        // function uploadRegularFile() { /* ... REMOVE ENTIRE FUNCTION ... */ }
 
-                    if (chunk && chunk.status === 'pending' && uploadSession.activeUploads < MAX_PARALLEL_UPLOADS) {
-                        uploadChunk(index);
-                        uploadsStarted++;
-                    }
-                    // Salir si alcanzamos el límite
-                    if (uploadSession.activeUploads >= MAX_PARALLEL_UPLOADS) break;
-                }
-                
-                // Verificar si hemos terminado (aunque improbable aquí si acabamos de iniciar cargas)
-                checkCompletion();
-            }
-            
-            // Función para subir un chunk específico
-            function uploadChunk(index) {
-                const chunkInfo = uploadSession.chunks.get(index);
-                
-                // Actualizar estado
-                chunkInfo.status = 'uploading';
-                chunkInfo.attempts++;
-                uploadSession.activeUploads++;
-                
-                // Actualizar UI
-                updateProgress(
-                    calculateProgress(),
-                    `Subiendo ${uploadSession.activeUploads} fragmentos en paralelo (${getCompletedCount()}/${totalChunks} completados)...`
-                );
-                
-                // Preparar el chunk
-                const start = index * CHUNK_SIZE;
-                const end = Math.min(file.size, start + CHUNK_SIZE);
-                const chunkBlob = file.slice(start, end); // Obtener el Blob directamente
-                
-                console.log(`Procesando fragmento ${index + 1}/${totalChunks}, tamaño: ${formatFileSize(chunkBlob.size)}, fileId: ${uploadSession.fileId || 'ninguno'}`);
-
-                // Calcular checksum (para verificación de integridad)
-                calculateChecksum(chunkBlob).then(checksum => {
-                    chunkInfo.checksum = checksum;
-                    
-                    // Verificar que tenemos un fileId válido
-                    if (!uploadSession.fileId) {
-                        console.error(`Error: No hay fileId para enviar el fragmento ${index + 1}`);
-                        handleChunkError(index, "Error: sesión no inicializada correctamente");
-                        return;
-                    }
-                    
-                    // Datos para enviar (sin chunkData como DataURL)
-                    const chunkMetadata = {
-                        sessionId: uploadSession.id,
-                        fileId: uploadSession.fileId,
-                        chunkIndex: index,
-                        chunkTotal: uploadSession.totalChunks,
-                        checksum: checksum,
-                        isLastChunk: index === uploadSession.totalChunks - 1,
-                        text: index === 0 ? text : '' // Texto solo con el primer fragmento
-                    };
-                    
-                    // Timeout de seguridad
-                    const timeout = setTimeout(() => {
-                        console.log(`Timeout para fragmento ${index + 1}`);
-                        handleChunkError(index, "Timeout en la respuesta del servidor");
-                    }, 60000); // Aumentado a 60s
-                    
-                    try {
-                        // Enviar metadatos y el Blob del fragmento directamente
-                        // Socket.IO v3+ soporta enviar datos binarios directamente
-                        // CORREGIDO: Usar el nombre de evento correcto 'chunkUpload'
-                        socket.emit('chunkUpload', chunkMetadata, chunkBlob, (response) => {
-                            // Actualizar timestamp de última actividad
-                            uploadSession.lastActivity = Date.now();
-                            uploadSession.activeUploads--;
-                            
-                            if (response && response.success) {
-                                // Marcar chunk como completado
-                                chunkInfo.status = 'completed';
-                                uploadedChunks.add(index); // Añadir al set de completados
-                                console.log(`Fragmento ${index + 1}/${totalChunks} confirmado.`);
-                                
-                                // Si fue el primer chunk, actualizar fileId si cambió y marcar como confirmado
-                                if (index === 0) {
-                                    if (response.fileId && response.fileId !== uploadSession.fileId) {
-                                        console.log(`FileId actualizado por el servidor a: ${response.fileId}`);
-                                        uploadSession.fileId = response.fileId;
-                                    }
-                                    if (!uploadSession.firstChunkConfirmed) {
-                                        console.log('Primer fragmento confirmado. Iniciando carga del resto.');
-                                        uploadSession.firstChunkConfirmed = true;
-                                    }
-                                }
-                                
-                                // Actualizar progreso
-                                updateProgress(calculateProgress(), `Progreso: ${getCompletedCount()}/${totalChunks} fragmentos (${Math.round(calculateProgress())}%)`);
-                                
-                                // Verificar si hemos terminado
-                                checkCompletion();
-                                
-                                // Intentar subir más chunks
-                                uploadNextChunks();
-                                
-                            } else {
-                                console.error(`Error en fragmento ${index + 1}:`, response?.error || 'Error desconocido');
-                                handleChunkError(index, response?.error || 'Error desconocido');
-                            }
-                        });
-                    } catch (socketError) {
-                        clearTimeout(timeout);
-                        console.error(`Error al enviar fragmento ${index + 1} al servidor:`, socketError);
-                        handleChunkError(index, "Error al enviar datos");
-                    }
-                    
-                }).catch(error => {
-                    console.error(`Error al calcular checksum para fragmento ${index + 1}:`, error);
-                    handleChunkError(index, "Error al verificar integridad");
-                });
-            }
-            
-            // Función para manejar errores de chunks
-            function handleChunkError(index, error) {
-                console.error(`Error en fragmento ${index + 1}: ${error}`);
-                const chunkInfo = uploadSession.chunks.get(index);
-                
-                if (chunkInfo.attempts < 3) {
-                    // Reintentar
-                    chunkInfo.status = 'pending';
-                    console.log(`Reintentando subida del fragmento ${index + 1} (intento ${chunkInfo.attempts + 1}/3)`);
-                    setTimeout(() => {
-                        uploadNextChunks();
-                    }, 1000 * chunkInfo.attempts);
-                } else {
-                    // Marcar como fallido
-                    chunkInfo.status = 'failed';
-                    
-                    // Verificar si podemos continuar sin este chunk
-                    if (canContinueWithoutChunk(index)) {
-                        console.log(`Continuando sin fragmento ${index + 1}`);
-                        uploadNextChunks();
-                    } else {
-                        handleUploadError(`Error al subir fragmento ${index + 1} después de varios intentos`);
-                    }
-                }
-            }
-            
-            // Verificar si podemos continuar sin un chunk específico
-            function canContinueWithoutChunk(index) {
-                // Si es el primer chunk, no podemos continuar
-                if (index === 0) return false;
-                
-                // Si es uno de los primeros chunks (metadatos críticos), no podemos continuar
-                if (index < 3) return false;
-                
-                // Calcular porcentaje de chunks completados
-                const completedPercent = (getCompletedCount() / uploadSession.totalChunks) * 100;
-                
-                // Si tenemos al menos 95% y es un chunk del final, podemos continuar
-                return completedPercent >= 95 && index > uploadSession.totalChunks * 0.75;
-            }
-            
-            // Finalizar la carga cuando todos los chunks están completos (o suficientes)
-            function finalizeUpload() {
-                console.log('Finalizando carga...');
-                
-                // Obtener lista de chunks completados
-                const completedChunks = getCompletedChunks();
-                
-                socket.emit('finalizeUpload', {
-                    sessionId: uploadSession.id,
-                    fileId: uploadSession.fileId,
-                    fileName: uploadSession.fileName,
-                    completedChunks: completedChunks,
-                    text: text
-                }, response => {
-                    // --- START ADDITION ---
-                    // If finalization fails, allow retrying later
-                    if (!(response && response.success)) {
-                        console.log('Finalization failed, allowing potential retry.');
-                        uploadSession.isFinalizing = false; 
-                    }
-                    // --- END ADDITION ---
-
-                    if (response && response.success) {
-                        console.log(`Archivo finalizado correctamente: ${response.mediaId || uploadSession.fileId}`);
-                        
-                        // Actualizar UI
-                        updateProgress(100, '¡Archivo subido completamente!');
-                        
-                        // Mostrar mensaje de éxito
-                        completeUpload();
-                        
-                        // Crear mensaje en el chat a partir de lo que nos devuelve el servidor
-                        if (response.confirmedMessage) {
-                            outputMediaMessage(response.confirmedMessage);
-                        } else {
-                            // Construir mensaje con la información disponible
-                            const message = {
-                                username: localUsername,
-                                userId: socket.id,
-                                time: moment().format('HH:mm'),
-                                text: text,
-                                media: `/api/stream/${response.mediaId || uploadSession.fileId}`,
-                                fileType: fileType,
-                                fileName: file.name,
-                                fileSize: file.size,
-                                isLargeFile: true,
-                                mediaId: response.mediaId || uploadSession.fileId
-                            };
-                            
-                            outputMediaMessage(message);
-                        }
-                        
-                        // Mostrar notificación si fue una carga parcial
-                        const isPartial = completedChunks.length < totalChunks;
-                        if (isPartial) {
-                            showTransferNotification(
-                                `Archivo "${file.name}" subido con ${completedChunks.length}/${totalChunks} fragmentos`,
-                                'warning'
-                            );
-                        }
-                    } else {
-                        handleUploadError(`Error al finalizar: ${response?.error || 'Error de conexión'}`);
-                    }
-                });
-            }
-            
-            // Verificar estado periódicamente con el servidor
-            function scheduleStatusCheck() {
-                setTimeout(() => {
-                    // Solo verificar si la carga aún está en progreso
-                    if (!isUploadComplete()) {
-                        console.log('Verificando estado con el servidor...');
-                        
-                        socket.emit('checkUploadStatus', {
-                            sessionId: uploadSession.id,
-                            fileId: uploadSession.fileId
-                        }, response => {
-                            if (response && response.success) {
-                                console.log('Estado recibido del servidor:', response);
-                                
-                                // Actualizar estado local según lo que reporta el servidor
-                                if (response.chunks && response.chunks.length > 0) {
-                                    response.chunks.forEach(serverChunk => {
-                                        const localChunk = uploadSession.chunks.get(serverChunk.index);
-                                        
-                                        if (serverChunk.status === 'completed' && 
-                                            localChunk && localChunk.status !== 'completed') {
-                                            console.log(`Fragmento ${serverChunk.index + 1} ya estaba completo en el servidor`);
-                                            localChunk.status = 'completed';
-                                        }
-                                    });
-                                    
-                                    // Actualizar UI con el progreso sincronizado
-                                    updateProgress(
-                                        calculateProgress(),
-                                        `Progreso sincronizado: ${getCompletedCount()}/${totalChunks}`
-                                    );
-                                    
-                                    // Verificar finalización
-                                    checkCompletion();
-                                }
-                                
-                                // Si aún no hemos terminado, programar otra verificación
-                                if (!isUploadComplete()) {
-                                    scheduleStatusCheck();
-                                }
-                            } else {
-                                console.warn('Error al verificar estado:', response?.error);
-                                
-                                // Seguir programando verificaciones aunque haya un error
-                                scheduleStatusCheck();
-                            }
-                        });
-                    }
-                }, 10000); // Verificar cada 10 segundos
-            }
-            
-            // Obtener conteo de chunks completados
-            function getCompletedCount() {
-                return [...uploadSession.chunks.values()]
-                    .filter(c => c.status === 'completed').length;
-            }
-            
-            // Obtener lista de índices de chunks completados
-            function getCompletedChunks() {
-                return [...uploadSession.chunks.entries()]
-                    .filter(([_, chunk]) => chunk.status === 'completed')
-                    .map(([index, _]) => index);
-            }
-            
-            // Calcular el progreso general
-            function calculateProgress() {
-                const completed = getCompletedCount();
-                const inProgress = uploadSession.activeUploads;
-                
-                // Dar algo de peso visual a los chunks en proceso (0.3 de avance)
-                return Math.min(99, Math.round(
-                    ((completed + (inProgress * 0.3)) / uploadSession.totalChunks) * 100)
-                );
-            }
-            
-            // Verificar si la carga está completa
-            function isUploadComplete() {
-                // Verificar si todos los chunks están completados
-                const completedCount = getCompletedCount();
-                
-                // CORREGIDO: Solo considerar completo si TODOS los chunks están listos.
-                // Eliminar la lógica de completitud parcial (>= 95% y chunks faltantes al final).
-                if (completedCount === totalChunks) {
-                    console.log(`Carga completa verificada: ${completedCount}/${totalChunks} chunks completados.`);
-                    return true;
-                }
-                
-                return false;
-            }
-            
-            // Verificar y gestionar la finalización
-            function checkCompletion() {
-                // Contador para verificar el estado de cada chunk
-                const counts = {
-                    completed: 0,
-                    pending: 0,
-                    uploading: 0,
-                    failed: 0
-                };
-                
-                // Contar el estado de cada chunk
-                for (const chunk of uploadSession.chunks.values()) {
-                    counts[chunk.status]++;
-                }
-                
-                console.log(`Estado de carga: ${counts.completed}/${totalChunks} completados, ${counts.uploading} en progreso, ${counts.pending} pendientes, ${counts.failed} fallidos`);
-                
-                if (isUploadComplete()) {
-                    // --- START REPLACEMENT ---
-                    if (!uploadSession.isFinalizing) {
-                        console.log('Carga completa detectada, iniciando finalización...');
-                        uploadSession.isFinalizing = true; // Mark as finalizing
-                        finalizeUpload();
-                    } else {
-                        console.log('Carga completa detectada, pero ya está en proceso de finalización.');
-                    }
-                    // --- END REPLACEMENT ---
-                } else if (counts.uploading === 0 && uploadSession.activeUploads < MAX_PARALLEL_UPLOADS && counts.pending > 0) {
-                    // Si no hay uploads activos, tenemos capacidad y hay chunks pendientes
-                    console.log('No hay uploads activos, continuando con más chunks...');
-                    uploadNextChunks();
-                } else if (counts.uploading === 0 && counts.pending === 0 && counts.failed > 0) {
-                    // Si no hay uploads activos, no hay pendientes, pero hay fallidos
-                    console.log(`Finalización fallida: ${counts.failed} chunks fallidos no pueden ser recuperados`);
-                    // Intentar recuperar los fallidos una última vez
-                    for (const [index, chunk] of uploadSession.chunks.entries()) {
-                        if (chunk.status === 'failed') {
-                            // Reintentar una última vez
-                            console.log(`Último intento para el chunk ${index}...`);
-                            chunk.status = 'pending';
-                            chunk.attempts = 0; // Reiniciar intentos
-                        }
-                    }
-                    uploadNextChunks();
-                }
-            }
-            
-            // Función para calcular checksum (para verificación de integridad)
-            function calculateChecksum(blob) {
-                return new Promise((resolve) => {
-                    // Implementación simplificada - en producción usar algo como SHA-256
-                    const reader = new FileReader();
-                    reader.onload = function() {
-                        // Usar los primeros bytes para un checksum rápido
-                        const array = new Uint8Array(reader.result.slice(0, 1024));
-                        let hash = 0;
-                        for (let i = 0; i < array.length; i++) {
-                            hash = ((hash << 5) - hash) + array[i];
-                            hash |= 0; // Convertir a entero de 32 bits
-                        }
-                        resolve(hash.toString(16));
-                    };
-                    reader.readAsArrayBuffer(blob);
-                });
-            }
-        }
+        // // IMPLEMENTACIÓN REDISEÑADA para cargar archivos grandes (ELIMINADA)
+        // function uploadLargeFile() {
+        //    /* ... REMOVE ENTIRE FUNCTION and its helpers like:
+        //       generateUniqueId, initializeUploadSession, uploadNextChunks, uploadChunk,
+        //       handleChunkError, canContinueWithoutChunk, finalizeUpload, scheduleStatusCheck,
+        //       getCompletedCount, getCompletedChunks, calculateProgress, isUploadComplete,
+        //       checkCompletion, calculateChecksum
+        //    */
+        //}
         
     } catch (generalError) {
-        console.error('Error general en handleMediaUpload:', generalError);
-        alert('Ha ocurrido un error al procesar el archivo. Por favor, inténtelo de nuevo.');
+        console.error('Error general en handleMediaUploadInternal:', generalError);
+        alert('Ha ocurrido un error inesperado al intentar subir el archivo.');
     }
 }
 
@@ -1904,18 +1307,32 @@ function outputMediaMessage(message, doScroll = true) {
     } else if (message.fileType === 'video') {
         // Usar una URL específica para streaming si existe mediaId (GridFS)
         // Si no, usar la URL directa (para archivos pequeños o externos)
-        const videoSrc = message.mediaId ? `/api/stream/${message.mediaId}` : message.media;
+        // const videoSrc = message.mediaId ? `/api/stream/${message.mediaId}` : message.media; // <-- Línea original comentada
 
-        mediaContent = `
-            <div class="video-container">
-                <div class="video-wrapper">
-                    <video src="${videoSrc}" class="media-content" preload="metadata" controls></video>
-                    <div class="video-play-icon">
-                        <i class="fas fa-play"></i>
+        // Usar siempre la ruta de streaming con el mediaId para videos
+        const videoSrc = message.mediaId
+            ? `/api/stream/${message.mediaId}`
+            : ''; // Dejar vacío si no hay mediaId (indica un problema)
+
+        // Si no hay videoSrc, mostrar error o placeholder
+        if (!videoSrc) {
+            console.error("Error: Mensaje de video sin mediaId:", message);
+            mediaContent = `<div class="video-error"><p>Error al cargar video (sin ID)</p></div>`;
+        } else {
+            // Agregar atributo para forzar precarga completa en videos pequeños
+            const preloadAttr = message.isSmallVideo ? 'preload="auto"' : 'preload="metadata"';
+
+            mediaContent = `
+                <div class="video-container">
+                    <div class="video-wrapper">
+                        <video src="${videoSrc}" class="media-content" ${preloadAttr} controls></video>
+                        <div class="video-play-icon">
+                            <i class="fas fa-play"></i>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
     } else if (message.fileType === 'audio') {
         // Similar para audio, usar /api/stream si es de GridFS
         const audioSrc = message.mediaId ? `/api/stream/${message.mediaId}` : message.media;
@@ -2001,9 +1418,141 @@ function outputMediaMessage(message, doScroll = true) {
         video.addEventListener('pause', function() {
             playIcon.style.opacity = '0.8';
         });
-         video.addEventListener('ended', function() {
+        video.addEventListener('ended', function() {
             playIcon.style.opacity = '0.8';
         });
+        
+        // Manejo especial para videos pequeños
+        if (message.isSmallVideo) {
+            // Para videos pequeños forzar carga completa antes de reproducir
+            video.addEventListener('canplaythrough', function onCanPlayThrough() {
+                console.log('Video pequeño listo para reproducción continua');
+                // Agregar clase para indicar que está completamente cargado
+                video.classList.add('small-video-loaded');
+                // Eliminar este listener después de la primera ejecución
+                video.removeEventListener('canplaythrough', onCanPlayThrough);
+            });
+            
+            // Contador de intentos de reproducción fallidos
+            let playbackFailCount = 0;
+            const maxPlaybackAttempts = 2;
+            
+            // Detectar errores de reproducción
+            video.addEventListener('error', function(e) {
+                console.error('Error al cargar video pequeño:', e);
+                playbackFailCount++;
+                
+                if (playbackFailCount <= maxPlaybackAttempts) {
+                    console.log(`Intento ${playbackFailCount}/${maxPlaybackAttempts} para reproducir video`);
+                    
+                    if (message.mediaId) {
+                        // Primero intentar con la ruta especial para videos pequeños
+                        if (playbackFailCount === 1) {
+                            console.log('Intentando con ruta de video pequeño optimizada');
+                            video.src = `/api/stream-small/${message.mediaId}`;
+                        } 
+                        // Si todavía falla, intentar con manejo especial
+                        else if (playbackFailCount === 2) {
+                            console.log('Intentando con manejo especial para videos problemáticos');
+                            video.src = `/api/stream-small/${message.mediaId}?forceFull=true`;
+                            
+                            // Añadir un indicador visual de carga
+                            const videoContainer = video.closest('.video-container');
+                            if (videoContainer && !videoContainer.querySelector('.special-loading')) {
+                                const loadingIndicator = document.createElement('div');
+                                loadingIndicator.className = 'special-loading';
+                                loadingIndicator.innerHTML = `
+                                    <div class="special-loading-spinner"></div>
+                                    <div class="special-loading-text">Cargando video en modo alternativo...</div>
+                                `;
+                                videoContainer.appendChild(loadingIndicator);
+                                
+                                // Eliminar indicador cuando el video pueda reproducirse
+                                video.addEventListener('canplay', function removeLoadingOnce() {
+                                    if (loadingIndicator) {
+                                        loadingIndicator.remove();
+                                    }
+                                    video.removeEventListener('canplay', removeLoadingOnce);
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    // Si se excede el número de intentos, mostrar mensaje de error
+                    const videoContainer = video.closest('.video-container');
+                    if (videoContainer) {
+                        videoContainer.innerHTML = `
+                            <div class="video-error">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <p>No se pudo reproducir este video</p>
+                                <button class="retry-video-btn" data-media-id="${message.mediaId}">
+                                    <i class="fas fa-sync-alt"></i> Reintentar
+                                </button>
+                                <a href="/api/download/${message.mediaId}" class="download-video-btn" download target="_blank">
+                                    <i class="fas fa-download"></i> Descargar video
+                                </a>
+                            </div>
+                        `;
+                        
+                        // Agregar listener para el botón de reintento
+                        const retryBtn = videoContainer.querySelector('.retry-video-btn');
+                        if (retryBtn) {
+                            retryBtn.addEventListener('click', function() {
+                                const mediaId = this.getAttribute('data-media-id');
+                                if (mediaId) {
+                                    // Reemplazar el contenedor con un nuevo video
+                                    videoContainer.innerHTML = `
+                                        <div class="video-wrapper">
+                                            <video src="/api/stream-small/${mediaId}?forceFull=true&t=${Date.now()}" 
+                                                class="media-content" preload="auto" controls></video>
+                                            <div class="video-play-icon">
+                                                <i class="fas fa-play"></i>
+                                            </div>
+                                            <div class="special-loading">
+                                                <div class="special-loading-spinner"></div>
+                                                <div class="special-loading-text">Cargando video en modo alternativo...</div>
+                                            </div>
+                                        </div>
+                                    `;
+                                    
+                                    // Recuperar la nueva referencia al video
+                                    const newVideo = videoContainer.querySelector('video');
+                                    const newLoadingIndicator = videoContainer.querySelector('.special-loading');
+                                    
+                                    // Configurar nuevos event listeners
+                                    if (newVideo) {
+                                        newVideo.addEventListener('canplay', function() {
+                                            if (newLoadingIndicator) {
+                                                newLoadingIndicator.remove();
+                                            }
+                                        });
+                                        
+                                        newVideo.addEventListener('play', function() {
+                                            const newPlayIcon = videoContainer.querySelector('.video-play-icon');
+                                            if (newPlayIcon) {
+                                                newPlayIcon.style.opacity = '0';
+                                            }
+                                        });
+                                        
+                                        const newPlayIcon = videoContainer.querySelector('.video-play-icon');
+                                        if (newPlayIcon) {
+                                            newPlayIcon.addEventListener('click', function(e) {
+                                                if (newVideo.paused) {
+                                                    newVideo.play().catch(err => console.error("Error al reproducir video:", err));
+                                                } else {
+                                                    newVideo.pause();
+                                                }
+                                                e.stopPropagation();
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        }
 
         // También controlar la reproducción al hacer clic en el icono
         playIcon.addEventListener('click', function(e) {

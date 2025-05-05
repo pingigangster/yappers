@@ -592,7 +592,21 @@ app.get('/api/files/:id', async (req, res) => {
             const fileMetadata = await messageController.getFileMetadata(fileId); // Obtener metadatos
             const fileSize = fileMetadata.length;
             const isVideo = fileMetadata.contentType && fileMetadata.contentType.startsWith('video/');
-            const isSmallVideo = isVideo && fileSize < 10 * 1024 * 1024; // Umbral de 10MB
+            const isSmallVideo = isVideo && fileSize < 15 * 1024 * 1024; // Umbral aumentado a 15MB
+            
+            // Parametro que permite forzar descarga completa para casos problemáticos
+            const forceFull = req.query.forceFull === 'true';
+            
+            // Verificar si este video específico necesita un enfoque diferente
+            const isPotentiallyProblematic = isSmallVideo && 
+                (fileSize > 10 * 1024 * 1024 && fileSize < 12 * 1024 * 1024);
+                
+            // Redirigir videos problemáticos a la ruta especializada
+            if (isVideo && (isPotentiallyProblematic || forceFull)) {
+                console.log(`Redirigiendo video posiblemente problemático a ruta especializada: ${fileId}`);
+                const forceModeParam = forceFull ? '&forceFull=true' : '';
+                return res.redirect(`/api/stream-small/${fileId}?problemDetected=true${forceModeParam}`);
+            }
             
             // Abrir el stream de descarga
             const file = await messageController.getFileById(fileId);
@@ -621,7 +635,7 @@ app.get('/api/files/:id', async (req, res) => {
             
             // --- MODIFICACIÓN PARA VIDEOS PEQUEÑOS ---
             let statusCode = 200;
-            if (isSmallVideo) {
+            if (isSmallVideo && !isPotentiallyProblematic) {
                 // Forzar status 206 para indicar al navegador que puede hacer streaming
                 statusCode = 206;
                 // Añadir Content-Range para que sea una respuesta parcial válida (aunque sea todo el archivo)
@@ -725,26 +739,15 @@ app.get('/api/stream/:mediaId', async (req, res) => {
         } else {
             // Sin rango, enviar archivo completo
             console.log(`Streaming completo solicitado para: ${file.filename}`);
-            // --- MODIFICACIÓN PARA VIDEOS PEQUEÑOS ---
+            
             const fileSize = file.length;
-            const isSmallVideo = fileSize < 10 * 1024 * 1024; // Umbral 10MB
-            let statusCode = 200;
-            const headers = {
+            console.log(`[Stream Route] Sirviendo video (${formatFileSize(fileSize)}) completo con status 200.`);
+            
+            res.writeHead(200, {
                 'Content-Length': file.length,
                 'Content-Type': file.contentType,
                 'Accept-Ranges': 'bytes' // Indicar que soportamos rangos
-            };
-
-            if (isSmallVideo) {
-                statusCode = 206; // Forzar Partial Content
-                headers['Content-Range'] = `bytes 0-${file.length - 1}/${file.length}`;
-                console.log(`[Stream Route] Sirviendo video pequeño (${formatFileSize(fileSize)}) completo con status 206.`);
-            } else {
-                 console.log(`[Stream Route] Sirviendo video grande (${formatFileSize(fileSize)}) completo con status 200.`);
-            }
-            // --- FIN MODIFICACIÓN ---
-
-            res.writeHead(statusCode, headers);
+            });
 
             const downloadStream = bucket.openDownloadStream(new mongoose.Types.ObjectId(mediaId));
             downloadStream.pipe(res);
@@ -758,6 +761,119 @@ app.get('/api/stream/:mediaId', async (req, res) => {
         }
     } catch (error) {
         console.error('Error en la ruta /api/stream:', error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+});
+
+// Nueva ruta optimizada para videos pequeños
+app.get('/api/stream-small/:mediaId', async (req, res) => {
+    try {
+        const mediaId = req.params.mediaId;
+
+        // Validar si es un ObjectId válido
+        if (!mongoose.Types.ObjectId.isValid(mediaId)) {
+            return res.status(400).json({ success: false, message: 'ID de medio inválido' });
+        }
+
+        const db = mongoose.connection.db;
+        const bucket = new mongoose.mongo.GridFSBucket(db, {
+            bucketName: 'uploads'
+        });
+
+        const files = await bucket.find({ _id: new mongoose.Types.ObjectId(mediaId) }).toArray();
+        if (!files || files.length === 0) {
+            console.log(`Stream Error: Archivo pequeño no encontrado con ID ${mediaId}`);
+            return res.status(404).json({ success: false, message: 'Archivo no encontrado' });
+        }
+        
+        const file = files[0];
+        
+        // Verificar que sea realmente un video pequeño
+        if (!file.contentType.startsWith('video/') || file.length > 15 * 1024 * 1024) {
+            console.log(`Redirigiendo a stream normal: ${file.filename} (${formatFileSize(file.length)})`);
+            return res.redirect(`/api/stream/${mediaId}?forceStream=true`);
+        }
+        
+        console.log(`Procesando video pequeño: ${file.filename} (${formatFileSize(file.length)})`);
+        
+        // Verificar si este video específico necesita un enfoque diferente
+        // basado en el historial o características del archivo
+        const requiresSpecialHandling = req.query.forceFull === 'true' || 
+                                      (file.length > 10 * 1024 * 1024 && file.length < 12 * 1024 * 1024);
+        
+        if (requiresSpecialHandling) {
+            console.log(`Usando manejo especial para video problemático: ${file.filename}`);
+            
+            // Para videos problemáticos, enviamos directamente con cabeceras especiales
+            // que fuerzan la carga completa antes de reproducción
+            const downloadStream = bucket.openDownloadStream(new mongoose.Types.ObjectId(mediaId));
+            
+            res.writeHead(200, {
+                'Content-Type': file.contentType,
+                'Content-Length': file.length,
+                'Content-Disposition': `inline; filename="${encodeURIComponent(file.filename)}"`,
+                'Cache-Control': 'public, max-age=86400', // Cachear por 24 horas
+                'X-Content-Type-Options': 'nosniff',
+                'Accept-Ranges': 'none', // Fuerza descarga completa sin streaming
+                'X-Special-Handling': 'true', // Indicador para debugging
+                'Pragma': 'no-cache', // Para navegadores más antiguos
+                'Expires': '0' // Fuerza validación con el servidor
+            });
+            
+            // Configurar listeners para el stream
+            downloadStream.on('error', (err) => {
+                console.error('Error al enviar video con manejo especial:', err);
+                if (!res.headersSent) {
+                    res.status(500).send('Error al procesar el video');
+                }
+            });
+            
+            // Pipe directamente a la respuesta
+            downloadStream.pipe(res);
+            console.log(`Enviando video problemático con método directo: ${mediaId}`);
+            return;
+        }
+        
+        // Para videos pequeños normales, continuar con el enfoque de carga en memoria
+        const chunks = [];
+        const downloadStream = bucket.openDownloadStream(new mongoose.Types.ObjectId(mediaId));
+        
+        downloadStream.on('data', (chunk) => {
+            chunks.push(chunk);
+        });
+        
+        downloadStream.on('error', (err) => {
+            console.error('Error al leer video pequeño:', err);
+            res.status(500).send('Error al procesar el video');
+        });
+        
+        downloadStream.on('end', () => {
+            try {
+                const fileBuffer = Buffer.concat(chunks);
+                console.log(`Video pequeño cargado en memoria: ${formatFileSize(fileBuffer.length)}`);
+                
+                // Enviar con cabeceras optimizadas para reproducción inmediata
+                res.writeHead(200, {
+                    'Content-Type': file.contentType,
+                    'Content-Length': fileBuffer.length,
+                    'Accept-Ranges': 'bytes',
+                    'Cache-Control': 'public, max-age=86400', // Cachear por 24 horas
+                    'X-Content-Type-Options': 'nosniff',
+                    'Content-Disposition': `inline; filename="${encodeURIComponent(file.filename)}"`,
+                    'X-Small-Video-Optimized': 'true'
+                });
+                
+                res.end(fileBuffer);
+                console.log(`Video pequeño enviado completamente: ${mediaId}`);
+            } catch (err) {
+                console.error('Error al procesar buffer de video:', err);
+                if (!res.headersSent) {
+                    res.status(500).send('Error al procesar el video');
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error en ruta de video pequeño:', error);
         res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 });
@@ -1373,301 +1489,88 @@ io.on('connection', async (socket) => {
         console.log(`Proceso de joinChat completado para ${username}`);
     });
 
-    // Escuchar mediaMessage (mensaje con archivo multimedia)
+    // Escuchar mediaMessage (MODIFICADO para recibir buffer y usar nuevo saveMediaMessage)
     socket.on('mediaMessage', async (data, callback) => {
+        // ... (código existente de la versión simplificada) ...
         try {
-            // Verificar que los datos son válidos
-            if (!data || !data.media) {
-                if (callback && typeof callback === 'function') {
-                    callback({ success: false, error: 'Datos multimedia no proporcionados' });
-                }
-                return;
+            // Verificar datos básicos y que el callback sea una función
+            if (!data || !data.fileBuffer || !data.fileName || typeof callback !== 'function') {
+                 console.error('Llamada inválida a mediaMessage:', { hasData: !!data, hasBuffer: !!data?.fileBuffer, hasFileName: !!data?.fileName, hasCallback: typeof callback === 'function' });
+                 return callback({ success: false, error: 'Datos multimedia o callback inválidos' });
             }
 
-            // Establecer un timeout para la operación
+             if (!Buffer.isBuffer(data.fileBuffer)) {
+                 console.error('Error: fileBuffer no es un Buffer en mediaMessage. Tipo recibido:', typeof data.fileBuffer);
+                 return callback({ success: false, error: 'Tipo de datos del archivo inesperado' });
+            }
+
+            console.log(`mediaMessage recibido: ${data.fileName}, Tamaño: ${data.fileSize || data.fileBuffer.length} bytes`);
+
             const operationTimeout = setTimeout(() => {
-                // Si el callback todavía existe, enviar respuesta de timeout
-                if (callback && typeof callback === 'function') {
-                    callback({ 
-                        success: false, 
-                        error: 'Tiempo de espera agotado en el servidor al procesar el archivo multimedia' 
+                console.error(`Timeout procesando mediaMessage para ${data.fileName} de ${socket.id}`);
+                if (callback) { 
+                    callback({
+                        success: false,
+                        error: 'Tiempo de espera agotado en el servidor al procesar el archivo'
                     });
-                    // Invalidar el callback para que no se llame dos veces
-                    callback = null;
+                    callback = null; 
                 }
-            }, 60000); // 60 segundos de timeout
-            
-            // Obtener usuario por socketId
+            }, 120000); 
+
             const users = await userController.getConnectedUsers();
             const user = users.find(u => u.socketId === socket.id);
-            
-            if (user) {
-                // Validar longitud del texto asociado al archivo
-                const validatedText = data.text && data.text.length > MAX_MESSAGE_LENGTH 
-                    ? data.text.substring(0, MAX_MESSAGE_LENGTH) 
-                    : data.text || '';
-                
-                // Preparar datos del mensaje
-                const messageData = {
-                    text: validatedText,
-                    media: data.media,
-                    fileType: data.fileType,
-                    fileName: data.fileName,
-                    fileSize: data.fileSize
-                };
-                
-                try {
-                    // Guardar mensaje multimedia en la base de datos
-                    const savedMessage = await messageController.saveMediaMessage(user.username, socket.id, messageData);
-                    console.log(`Mensaje multimedia guardado correctamente: ${savedMessage._id}`);
-                    
-                    // Cancelar el timeout ya que la operación completó exitosamente
-                    clearTimeout(operationTimeout);
-                    
-                    // Crear objeto para emitir a todos los clientes
-                    const messageForClients = {
-                        username: user.username,
-                        userId: socket.id,
-                        time: moment(savedMessage.createdAt).format('HH:mm'),
-                        text: validatedText,
-                        media: messageData.media, // Ya actualizado en saveMediaMessage
-                        fileType: messageData.fileType,
-                        fileName: messageData.fileName,
-                        fileSize: messageData.fileSize,
-                        isLargeFile: true, // Todos los archivos ahora se guardan en GridFS
-                        mediaId: savedMessage.mediaId || messageData.mediaId, // Asegurar que el ID siempre esté disponible
-                        _id: savedMessage._id.toString() // Añadir el ID del mensaje para facilitar actualizaciones
-                    };
-                
-                    // Emitir mensaje a todos los DEMÁS clientes (no al remitente)
-                    socket.broadcast.emit('mediaMessage', messageForClients);
-                    
-                    // Enviar respuesta al cliente que subió el archivo
-                    if (callback && typeof callback === 'function') {
-                        callback({ 
-                            success: true,
-                            mediaId: savedMessage.mediaId || messageData.mediaId,
-                            confirmedMessage: messageForClients, // Enviar el mensaje confirmado para actualizar la vista local
-                            status: 'confirmed', // Indicar que el mensaje está confirmado y no debe mostrarse como pendiente
-                            showClock: false // Campo explícito para indicar que no debe mostrarse el reloj
-                        });
-                    }
-                } catch (error) {
-                    // Cancelar el timeout ya que tenemos un error
-                    clearTimeout(operationTimeout);
-                    
-                    console.error('Error al guardar mensaje multimedia:', error);
-                    
-                    // Enviar error al cliente
-                    if (callback && typeof callback === 'function') {
-                        callback({ 
-                            success: false, 
-                            error: error.message || 'Error al guardar mensaje multimedia'
-                        });
-                    }
-                }
-            } else {
-                // Cancelar el timeout ya que tenemos un error
-                clearTimeout(operationTimeout);
-                
-                // Usuario no encontrado
-                if (callback && typeof callback === 'function') {
-                    callback({ success: false, error: 'Usuario no encontrado' });
-                }
-            }
-        } catch (error) {
-            console.error('Error general al procesar mensaje multimedia:', error);
-            
-            // Enviar error al cliente si el callback es válido
-            if (callback && typeof callback === 'function') {
-                callback({ 
-                    success: false, 
-                    error: error.message || 'Error inesperado al procesar mensaje multimedia'
-                });
-            }
-        }
-    });
 
-    // Manejar subida de archivos por fragmentos (chunks)
-    socket.on('chunkUpload', async (metadata, chunkBlob, callback) => {
-        try {
-            // Verificar que los datos y el callback son válidos
-            if (!metadata || !chunkBlob || typeof callback !== 'function') {
-                console.error('Llamada inválida a chunkUpload:', { hasMetadata: !!metadata, hasChunkBlob: !!chunkBlob, hasCallback: typeof callback === 'function' });
-                if (typeof callback === 'function') {
-                     callback({ success: false, error: 'Datos del fragmento o callback inválidos' });
-                }
-                return; 
-            }
-
-            // Verificar que chunkBlob es un Buffer (Socket.IO debería convertirlo)
-            if (!Buffer.isBuffer(chunkBlob)) {
-                 console.error('Error: chunkBlob no es un Buffer. Tipo recibido:', typeof chunkBlob);
-                 callback({ success: false, error: 'Tipo de datos del fragmento inesperado' });
-                 return;
-            }
-
-            console.log(`Chunk ${metadata.chunkIndex + 1}/${metadata.chunkTotal} recibido de ${socket.id} (${chunkBlob.length} bytes)`);
-
-            // Establecer un timeout para la operación
-            const operationTimeout = setTimeout(() => {
-                console.error(`Timeout procesando chunk ${metadata.chunkIndex + 1} de ${socket.id}`);
-                if (callback && typeof callback === 'function') {
-                    callback({ 
-                        success: false, 
-                        error: 'Tiempo de espera agotado en el servidor al procesar el fragmento' 
-                    });
-                    callback = null; // Invalidar para evitar doble llamada
-                }
-            }, 60000); // 60 segundos de timeout
-
-            // Obtener usuario por socketId
-            const users = await userController.getConnectedUsers();
-            const user = users.find(u => u.socketId === socket.id);
-            
             if (!user) {
-                clearTimeout(operationTimeout);
-                console.error(`Usuario no encontrado para socket ${socket.id} al procesar chunk`);
-                callback({ success: false, error: 'Usuario no encontrado' });
-                return;
-            }
-            
-            // Validar longitud del texto asociado al archivo (solo para el primer fragmento)
-            const validatedText = metadata.text && metadata.text.length > MAX_MESSAGE_LENGTH 
-                ? metadata.text.substring(0, MAX_MESSAGE_LENGTH) 
-                : metadata.text || '';
-            
-            // Iniciar procesamiento asíncrono del fragmento
-            // CORREGIDO: Pasar metadatos y el buffer directamente
-            const processPromise = messageController.processFileChunk({
-                username: user.username,
-                userId: socket.id,
-                chunkBuffer: chunkBlob, // <<--- Pasar el buffer directamente
-                fileName: metadata.fileName,
-                fileType: metadata.fileType,
-                fileSize: metadata.fileSize,
-                text: validatedText,
-                currentChunk: metadata.chunkIndex,
-                totalChunks: metadata.chunkTotal,
-                isLastChunk: metadata.isLastChunk,
-                fileId: metadata.fileId,
-                checksum: metadata.checksum // Pasar checksum si se necesita verificar
-            });
-            
-            // Manejar resultado o error
-            processPromise.then(processedChunk => {
-                // Cancelar el timeout ya que la operación completó exitosamente
-                clearTimeout(operationTimeout);
-                
-                // Verificar que el callback todavía sea válido
-                if (callback && typeof callback === 'function') {
-                    
-                    // Si processFileChunk devolvió confirmedMessage, significa que fue el último chunk y todo se guardó.
-                    if (processedChunk.confirmedMessage) {
-                        console.log('Último fragmento procesado y guardado. Enviando broadcast y callback con confirmación.');
-                        // Emitir a todos los DEMÁS clientes
-                        socket.broadcast.emit('mediaMessage', processedChunk.confirmedMessage);
-                        
-                        // Enviar confirmación COMPLETA al remitente
-                        callback({
-                            success: true, 
-                            fileId: processedChunk.fileId,
-                            chunkProcessed: processedChunk.chunkProcessed, // Usar info del resultado
-                            totalChunks: processedChunk.totalChunks,
-                            confirmedMessage: processedChunk.confirmedMessage // <<--- ¡AÑADIR ESTO! ---
-                        });
-                    } else {
-                        // No es el último chunk, solo confirmar progreso
-                        console.log(`Fragmento ${processedChunk.chunkProcessed}/${processedChunk.totalChunks} procesado. Enviando callback de progreso.`);
-                        callback({ 
-                            success: true, 
-                            fileId: processedChunk.fileId,
-                            chunkProcessed: processedChunk.chunkProcessed,
-                            totalChunks: processedChunk.totalChunks
-                        });
-                    }
-                }
-            }).catch(error => {
-                // Cancelar el timeout ya que tenemos un error
-                clearTimeout(operationTimeout);
-                
-                console.error('Error al procesar fragmento de archivo:', error);
-                
-                // Verificar que el callback todavía sea válido
-                if (callback && typeof callback === 'function') {
-                    // Enviar error al cliente
-                    callback({ 
-                        success: false, 
-                        error: error.message || 'Error al procesar fragmento de archivo'
-                    });
-                }
-            });
-            
-        } catch (error) {
-            console.error('Error general al procesar fragmento de archivo:', error);
-            // Enviar error al cliente si el callback es válido
-            if (callback && typeof callback === 'function') {
-                callback({ 
-                    success: false, 
-                    error: error.message || 'Error inesperado al procesar fragmento'
-                });
-            }
-        }
-    });
-
-    // <<--- AÑADIR ESTE NUEVO LISTENER --->>
-    socket.on('finalizeUpload', async (data, callback) => {
-        try {
-            console.log(`Solicitud para finalizar carga recibida: ${data?.fileId || data?.sessionId}`);
-            
-            if (!data || !data.fileId || !data.fileName) {
-                console.error('Datos incompletos para finalizar carga');
-                if (callback) callback({ success: false, error: 'Datos incompletos' });
-                return;
+                 clearTimeout(operationTimeout);
+                 console.error(`Usuario no encontrado para socket ${socket.id} al procesar mediaMessage`);
+                 return callback({ success: false, error: 'Usuario no encontrado o no autenticado' });
             }
 
-            // Obtener usuario
-            const users = await userController.getConnectedUsers();
-            const user = users.find(u => u.socketId === socket.id);
-            if (!user) {
-                console.error('Usuario no encontrado al finalizar carga');
-                if (callback) callback({ success: false, error: 'Usuario no encontrado' });
-                return;
-            }
+            const validatedText = data.text && data.text.length > MAX_MESSAGE_LENGTH
+                ? data.text.substring(0, MAX_MESSAGE_LENGTH)
+                : data.text || '';
 
-            // Llamar al controlador para finalizar
-            const result = await messageController.finalizeFileChunk({
-                username: user.username,
-                userId: socket.id,
-                fileId: data.fileId,
+            const result = await messageController.saveMediaMessage(user.username, socket.id, {
+                fileBuffer: data.fileBuffer,
+                fileType: data.fileType,
                 fileName: data.fileName,
-                totalChunks: data.totalChunks, // Puede que no lo necesitemos aquí si ya está en tempStorage
-                completedChunks: data.completedChunks, // Lista de chunks completados (para verificación)
-                text: data.text || ''
-                // fileType y fileSize deberían obtenerse/confirmarse en el controlador
+                fileSize: data.fileSize || data.fileBuffer.length,
+                text: validatedText
             });
 
-            // Si la finalización fue exitosa y tenemos el mensaje confirmado
-            if (result.success && result.confirmedMessage) {
-                console.log(`Archivo ${data.fileName} finalizado correctamente. ID: ${result.fileId}`);
-                // Emitir a otros clientes
-                socket.broadcast.emit('mediaMessage', result.confirmedMessage);
-                // Enviar confirmación al remitente
-                if (callback) callback({ success: true, mediaId: result.fileId, confirmedMessage: result.confirmedMessage });
-            } else {
-                // Si falló la finalización en el controlador
-                console.error(`Error al finalizar archivo en controlador: ${result.error}`);
-                if (callback) callback({ success: false, error: result.error || 'Error al finalizar archivo' });
-            }
+            clearTimeout(operationTimeout);
 
+             if (!callback) {
+                console.warn(`Callback inválido después de procesar mediaMessage para ${data.fileName}`);
+                return;
+             }
+
+            if (result.success && result.confirmedMessage) {
+                console.log(`Archivo ${data.fileName} guardado y mensaje creado (${result.confirmedMessage._id}). Emitiendo broadcast.`);
+                socket.broadcast.emit('mediaMessage', result.confirmedMessage);
+                callback({
+                    success: true,
+                    confirmedMessage: result.confirmedMessage
+                });
+            } else {
+                console.error(`Error al guardar mediaMessage para ${data.fileName}:`, result.error);
+                callback({
+                    success: false,
+                    error: result.error || 'Error desconocido al guardar el archivo en el servidor'
+                });
+            }
         } catch (error) {
-            console.error('Error general en finalizeUpload:', error);
-            if (callback) callback({ success: false, error: error.message || 'Error interno del servidor' });
+            console.error('Error general en el handler de mediaMessage:', error);
+             if (callback && typeof callback === 'function') {
+                 callback({
+                     success: false,
+                     error: error.message || 'Error inesperado en el servidor al procesar archivo'
+                 });
+             }
         }
     });
-    // <<--- FIN DEL NUEVO LISTENER --->>
 
-    // <<--- AÑADIR LISTENER PARA chatMessage --->>
+    // Listener para chatMessage (SIN CAMBIOS)
     socket.on('chatMessage', async (msg, callback) => {
         try {
             // Obtener usuario por socketId
@@ -1713,9 +1616,8 @@ io.on('connection', async (socket) => {
              }
         }
     });
-    // <<--- FIN DEL LISTENER chatMessage --->>
 
-    // Cuando un cliente se desconecta
+    // Cuando un cliente se desconecta (SIN CAMBIOS)
     socket.on('disconnect', async () => {
         try {
             console.log(`Usuario desconectado, socketId: ${socket.id}`);
