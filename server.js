@@ -528,6 +528,15 @@ app.use(express.static(path.join(__dirname, 'public'), {
     index: false // Esto evita servir automáticamente index.html
 }));
 
+// Función auxiliar para formatear tamaño de archivo en logs
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 // Ruta para servir archivos almacenados en GridFS
 app.get('/api/files/:id', async (req, res) => {
     try {
@@ -580,64 +589,66 @@ app.get('/api/files/:id', async (req, res) => {
             file.stream.pipe(res);
         } else {
             // Streaming normal para descargas completas
+            const fileMetadata = await messageController.getFileMetadata(fileId); // Obtener metadatos
+            const fileSize = fileMetadata.length;
+            const isVideo = fileMetadata.contentType && fileMetadata.contentType.startsWith('video/');
+            const isSmallVideo = isVideo && fileSize < 10 * 1024 * 1024; // Umbral de 10MB
+            
+            // Abrir el stream de descarga
             const file = await messageController.getFileById(fileId);
             
-            // Detectar si es un video u otro tipo de archivo
-            const isVideo = file.file.contentType && file.file.contentType.startsWith('video/');
             const isViewable = /^(image|video|audio)\//.test(file.file.contentType);
-            
-            // Sanitizar el nombre del archivo para el header Content-Disposition
             let filename = file.file.filename || 'archivo';
-            // Eliminar caracteres problemáticos y codificar
             filename = filename.replace(/[^\w.-]/g, '_');
             
-            // Configurar headers de respuesta
             const headers = {
                 'Content-Type': file.file.contentType,
                 'Content-Length': file.file.length,
-                'Accept-Ranges': 'bytes',
-                'Cache-Control': 'public, max-age=3600', // Permitir caché por 1 hora
-                'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition'
+                'Accept-Ranges': 'bytes', // Indicar siempre que aceptamos rangos
+                'Cache-Control': 'public, max-age=3600',
+                'Access-Control-Expose-Headers': 'Content-Length, Content-Disposition, Accept-Ranges'
             };
             
-            // Dependiendo del tipo, configurar para visualización o descarga
             if (isViewable) {
                 headers['Content-Disposition'] = `inline; filename="${filename}"`;
             } else {
                 headers['Content-Disposition'] = `attachment; filename="${filename}"`;
             }
             
-            // Para videos, usar encabezados adicionales que ayuden con el streaming
             if (isVideo) {
                 headers['X-Content-Type-Options'] = 'nosniff';
             }
             
-            // Establecer todos los headers
-            res.set(headers);
+            // --- MODIFICACIÓN PARA VIDEOS PEQUEÑOS ---
+            let statusCode = 200;
+            if (isSmallVideo) {
+                // Forzar status 206 para indicar al navegador que puede hacer streaming
+                statusCode = 206;
+                // Añadir Content-Range para que sea una respuesta parcial válida (aunque sea todo el archivo)
+                headers['Content-Range'] = `bytes 0-${file.file.length - 1}/${file.file.length}`;
+                console.log(`[Files Route] Sirviendo video pequeño (${formatFileSize(fileSize)}) con status 206.`);
+            }
+            // --- FIN MODIFICACIÓN ---
             
-            // Configurar manejo de eventos para el stream
+            res.status(statusCode).set(headers);
+            
+            // Configurar manejo de eventos para el stream (sin cambios)
             let streamClosed = false;
-            
-            // Cuando la respuesta se complete
             res.on('finish', () => {
-                console.log(`Visualización completada: ${fileId}`);
+                console.log(`Visualización/Descarga completada: ${fileId}`);
                 streamClosed = true;
             });
-            
-            // Cuando el cliente cierra la conexión
             res.on('close', () => {
                 if (!streamClosed) {
-                    console.log(`Visualización interrumpida: ${fileId}`);
+                    console.log(`Visualización/Descarga interrumpida: ${fileId}`);
                 }
             });
-            
-            // Manejar errores del stream
             file.stream.on('error', (err) => {
-                console.error(`Error en stream completo: ${fileId}`, err);
+                console.error(`Error en stream completo/pequeño: ${fileId}`, err);
                 if (!res.headersSent) {
                     res.status(500).json({ 
                         success: false, 
-                        message: 'Error al procesar archivo para visualización' 
+                        message: 'Error al procesar archivo para visualización/descarga' 
                     });
                 }
             });
@@ -713,12 +724,27 @@ app.get('/api/stream/:mediaId', async (req, res) => {
             });
         } else {
             // Sin rango, enviar archivo completo
-            console.log(`Streaming completo: ${file.filename}`);
-            res.writeHead(200, {
+            console.log(`Streaming completo solicitado para: ${file.filename}`);
+            // --- MODIFICACIÓN PARA VIDEOS PEQUEÑOS ---
+            const fileSize = file.length;
+            const isSmallVideo = fileSize < 10 * 1024 * 1024; // Umbral 10MB
+            let statusCode = 200;
+            const headers = {
                 'Content-Length': file.length,
                 'Content-Type': file.contentType,
                 'Accept-Ranges': 'bytes' // Indicar que soportamos rangos
-            });
+            };
+
+            if (isSmallVideo) {
+                statusCode = 206; // Forzar Partial Content
+                headers['Content-Range'] = `bytes 0-${file.length - 1}/${file.length}`;
+                console.log(`[Stream Route] Sirviendo video pequeño (${formatFileSize(fileSize)}) completo con status 206.`);
+            } else {
+                 console.log(`[Stream Route] Sirviendo video grande (${formatFileSize(fileSize)}) completo con status 200.`);
+            }
+            // --- FIN MODIFICACIÓN ---
+
+            res.writeHead(statusCode, headers);
 
             const downloadStream = bucket.openDownloadStream(new mongoose.Types.ObjectId(mediaId));
             downloadStream.pipe(res);
