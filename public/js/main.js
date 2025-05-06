@@ -1286,52 +1286,49 @@ function outputMediaMessage(message, doScroll = true) {
 
     // Crear el contenido multimedia en función del tipo
     let mediaContent = '';
+    let mediaUrl = ''; // URL para visualización/reproducción
+    let downloadUrl = ''; // URL específica para descarga
 
-    // Preparar datos del botón de descarga
-    const getDownloadButton = (url, fileName, title, isVideo = false, mediaId = '') => {
-        // Usar la URL de descarga específica para el botón
-        const finalDownloadUrl = (isVideo || message.fileType === 'audio') && mediaId ? `/api/download/${mediaId}` : url;
-        return `<a href="${finalDownloadUrl}" class="download-btn" download="${fileName || 'archivo'}"
-                 title="${title}" ${isVideo ? `data-is-video="true" data-media-id="${mediaId}"` : ''}>
+    // Construir la URL base usando mediaId
+    if (message.mediaId) {
+         // Usar /api/stream para reproducción y /api/download para descarga
+         mediaUrl = `/api/stream/${message.mediaId}`;
+         downloadUrl = `/api/download/${message.mediaId}`;
+    } else {
+         console.error("Error: Mensaje multimedia sin mediaId:", message);
+    }
+
+    // Preparar datos del botón de descarga (usa downloadUrl)
+    const getDownloadButton = (effectiveDownloadUrl, fileName, title) => {
+        // <<< SIMPLIFICAR: Siempre usar la URL de descarga pasada si existe >>>
+        // const finalDownloadUrl = (isVideo || message.fileType === 'audio') && mediaId ? `/api/download/${mediaId}` : url;
+        return `<a href="${effectiveDownloadUrl || '#'}" class="download-btn" download="${fileName || 'archivo'}"
+                 title="${title}">
                 <i class="fas fa-cloud-download-alt"></i>
                </a>`;
     };
 
+    // Renderizar contenido multimedia según el tipo (usa mediaUrl)
     if (message.fileType === 'image' || message.fileType === 'gif') {
         mediaContent = `
             <div class="image-container">
-                <img src="${message.media}" alt="${message.fileType === 'image' ? 'Imagen' : 'GIF'} compartida" class="media-content">
+                <img src="${mediaUrl}" alt="${message.fileType === 'image' ? 'Imagen' : 'GIF'} compartida" class="media-content">
             </div>
         `;
     } else if (message.fileType === 'video') {
-        // Usar una URL específica para streaming si existe mediaId (GridFS)
-        // Si no, usar la URL directa (para archivos pequeños o externos)
-        // const videoSrc = message.mediaId ? `/api/stream/${message.mediaId}` : message.media; // <-- Línea original comentada
-
         // Usar siempre la ruta de streaming con el mediaId para videos
-        const videoSrc = message.mediaId
-            ? `/api/stream/${message.mediaId}`
-            : ''; // Dejar vacío si no hay mediaId (indica un problema)
+        const preloadAttr = message.isSmallVideo ? 'preload="auto"' : 'preload="metadata"';
 
-        // Si no hay videoSrc, mostrar error o placeholder
-        if (!videoSrc) {
-            console.error("Error: Mensaje de video sin mediaId:", message);
-            mediaContent = `<div class="video-error"><p>Error al cargar video (sin ID)</p></div>`;
-        } else {
-            // Agregar atributo para forzar precarga completa en videos pequeños
-            const preloadAttr = message.isSmallVideo ? 'preload="auto"' : 'preload="metadata"';
-
-            mediaContent = `
-                <div class="video-container">
-                    <div class="video-wrapper">
-                        <video src="${videoSrc}" class="media-content" ${preloadAttr} controls></video>
-                        <div class="video-play-icon">
-                            <i class="fas fa-play"></i>
-                        </div>
+        mediaContent = `
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <video src="${mediaUrl}" class="media-content" ${preloadAttr} controls></video>
+                    <div class="video-play-icon">
+                        <i class="fas fa-play"></i>
                     </div>
                 </div>
-            `;
-        }
+            </div>
+        `;
     } else if (message.fileType === 'audio') {
         // Similar para audio, usar /api/stream si es de GridFS
         const audioSrc = message.mediaId ? `/api/stream/${message.mediaId}` : message.media;
@@ -1379,11 +1376,10 @@ function outputMediaMessage(message, doScroll = true) {
 
     // Construir el botón de descarga (la URL de descarga se gestiona en getDownloadButton)
     const downloadButton = getDownloadButton(
-        message.media, // URL original o base
+        downloadUrl, // <-- Pasar la URL /api/download/:id 
         message.fileName,
-        downloadTitle,
-        message.fileType === 'video',
-        message.mediaId || ''
+        downloadTitle
+        // Ya no se necesitan los argumentos isVideo ni mediaId aquí
     );
 
     div.innerHTML = `
