@@ -32,10 +32,11 @@ let localUsername = window.username;
 let lastMessageTime = 0;
 let messageQueue = [];
 let messageProcessing = false;
+let messageQueueTimerId = null; // <--- NUEVA VARIABLE GLOBAL
 const MESSAGE_RATE_LIMIT = 500; // 500ms = 2 mensajes por segundo máximo
 const MAX_QUEUE_SIZE = 10; // Máximo de mensajes en cola (aumentado a 10)
 const COOLDOWN_TIME = 2000; // 2 segundos de cooldown
-const BURST_MESSAGES_LIMIT = 10; // Número de mensajes rápidos antes de activar cooldown (aumentado a 10)
+const BURST_MESSAGES_LIMIT = 6; // Número de mensajes rápidos antes de activar cooldown (CAMBIADO DE 10 a 6)
 
 // Variables para control de ráfaga de mensajes
 let messagesSentInBurst = 0;
@@ -549,12 +550,16 @@ socket.on('messagesDeleted', data => {
 function showRateLimitAlert() {
     if (!rateLimitAlertDisplayed) {
         rateLimitAlertDisplayed = true;
-        alert('Estás enviando mensajes demasiado rápido. Por favor, espera un momento antes de enviar más mensajes.');
+        // Usar notificación no bloqueante en lugar de alert()
+        showTransferNotification(
+            'Estás enviando mensajes demasiado rápido. Por favor, espera un momento.',
+            'warning' // Usar tipo 'warning' para un estilo adecuado
+        );
         
         // Resetear el estado de la alerta después de un tiempo
         setTimeout(() => {
             rateLimitAlertDisplayed = false;
-        }, 3000);
+        }, 3000); // Mantener el mismo timeout para evitar spam de notificaciones
     }
 }
 
@@ -573,6 +578,7 @@ function canAddToQueue() {
 function processMessageQueue() {
     if (messageQueue.length === 0) {
         messageProcessing = false;
+        messageQueueTimerId = null; // Limpiar ID del temporizador
         return;
     }
     
@@ -583,7 +589,7 @@ function processMessageQueue() {
     
     // Si no ha pasado suficiente tiempo desde el último mensaje, esperar
     if (timeSinceLastMessage < MESSAGE_RATE_LIMIT) {
-        setTimeout(processMessageQueue, MESSAGE_RATE_LIMIT - timeSinceLastMessage);
+        messageQueueTimerId = setTimeout(processMessageQueue, MESSAGE_RATE_LIMIT - timeSinceLastMessage); // Asignar ID
         return;
     }
     
@@ -624,9 +630,10 @@ function processMessageQueue() {
     
     // Si quedan mensajes en la cola, programar el siguiente procesamiento
     if (messageQueue.length > 0) {
-        setTimeout(processMessageQueue, MESSAGE_RATE_LIMIT);
+        messageQueueTimerId = setTimeout(processMessageQueue, MESSAGE_RATE_LIMIT); // Asignar ID
     } else {
         messageProcessing = false;
+        messageQueueTimerId = null; // Limpiar ID del temporizador
     }
 }
 
@@ -651,7 +658,7 @@ function addTempMessage(message) {
     // Activar animación de entrada
     setTimeout(() => {
         div.classList.add('active');
-    }, 10);
+    }, 1); // Reducido de 10ms
     
     scrollToBottom();
     return div; // Devolvemos el div por si el callback de error necesita marcarlo
@@ -730,7 +737,7 @@ chatForm.addEventListener('submit', (e) => {
 
     // No hacer nada si estamos en cooldown
     if (isCooldown) {
-        showRateLimitAlert();
+        showRateLimitAlert(); // Esta alerta es por cooldown, no por cola llena.
         return;
     }
 
@@ -739,8 +746,14 @@ chatForm.addEventListener('submit', (e) => {
 
     if (msg !== '') {
         // Verificar si podemos añadir el mensaje a la cola
+        // canAddToQueue() llamará a showRateLimitAlert() si la cola está llena.
         if (!canAddToQueue()) {
-            return; // No seguir si no podemos añadir más mensajes
+            // Si la cola está llena (MAX_QUEUE_SIZE alcanzado), 
+            // canAddToQueue ya mostró la alerta. 
+            // Simplemente no añadimos este mensaje, pero la cola existente y su 
+            // procesamiento continúan después de cerrar la alerta.
+            console.log('Message queue (text) is full. Current message not added. Queue processing continues.');
+            return; 
         }
         
         // Verificar si el mensaje excede el límite de caracteres
@@ -1023,7 +1036,7 @@ function handleMediaUploadInternal(file, text) {
         
         const fileType = getFileType(file);
         console.log('Tipo de archivo detectado:', fileType);
-
+        
         // Crear el mensaje temporal inmediatamente
         const tempDiv = document.createElement('div');
         tempDiv.classList.add('message', 'self', 'fade-in', 'uploading-message');
@@ -1057,11 +1070,11 @@ function handleMediaUploadInternal(file, text) {
         
         const uploadStatus = tempDiv.querySelector('.upload-status');
         const uploadIcon = tempDiv.querySelector('.file-upload-header i');
-
+        
         function handleUploadError(errorMessage) {
             console.error('Error en la carga:', errorMessage);
             if (tempDiv) {
-                tempDiv.classList.add('error');
+            tempDiv.classList.add('error');
                 if (uploadStatus) uploadStatus.textContent = `Error: ${errorMessage}`;
                 if (uploadIcon) {
                     uploadIcon.classList.remove('fa-spinner', 'fa-spin');
@@ -1082,52 +1095,52 @@ function handleMediaUploadInternal(file, text) {
             }
             showTransferNotification(`Archivo "${file.name}" subido correctamente`, 'success');
         }
-
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
+        
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
              console.log('Archivo leído como ArrayBuffer, enviando al servidor...');
              if (uploadStatus) uploadStatus.textContent = 'Enviando...';
-
+                
              const fileBuffer = e.target.result; 
 
-             const messageData = {
+                const messageData = {
                  fileBuffer: fileBuffer,
-                 text: text,
-                 fileType: fileType,
-                 fileName: file.name,
-                 fileSize: file.size
-             };
-
-             const uploadTimeout = setTimeout(() => {
-                 handleUploadError('No se recibió respuesta del servidor. Inténtelo de nuevo.');
+                    text: text,
+                    fileType: fileType,
+                    fileName: file.name,
+                    fileSize: file.size
+                };
+                
+                const uploadTimeout = setTimeout(() => {
+                    handleUploadError('No se recibió respuesta del servidor. Inténtelo de nuevo.');
              }, 120000);
-
-             socket.emit('mediaMessage', messageData, (response) => {
-                 clearTimeout(uploadTimeout); 
+                
+                socket.emit('mediaMessage', messageData, (response) => {
+                    clearTimeout(uploadTimeout);
                  console.log('Respuesta del servidor (mediaMessage - simple upload):', response);
 
                  if (response && response.success && response.confirmedMessage) {
                      completeUpload();
-                     console.log('Renderizando mensaje multimedia confirmado para el remitente');
-                     outputMediaMessage(response.confirmedMessage);
+                            console.log('Renderizando mensaje multimedia confirmado para el remitente');
+                            outputMediaMessage(response.confirmedMessage);
                      scrollToBottom();
-                 } else {
+                        } else {
                      handleUploadError(response?.error || 'Error al procesar archivo en el servidor');
-                 }
-             });
-        };
-
-        reader.onerror = function(error) {
+                    }
+                });
+            };
+            
+            reader.onerror = function(error) {
             console.error('Error al leer archivo como ArrayBuffer:', error);
             handleUploadError('Error al leer el archivo localmente');
-        };
-
-        try {
+            };
+            
+            try {
              reader.readAsArrayBuffer(file);
-        } catch (error) {
-             console.error('Error al iniciar la lectura del archivo:', error);
-             handleUploadError('Error al iniciar la lectura del archivo');
+            } catch (error) {
+                console.error('Error al iniciar la lectura del archivo:', error);
+                handleUploadError('Error al iniciar la lectura del archivo');
         }
 
         // // Función para cargar archivos pequeños (ELIMINADA)
@@ -1266,7 +1279,7 @@ function outputMessage(message, doScroll = true) {
     // Activar animación de entrada
     setTimeout(() => {
         div.classList.add('active');
-    }, 10);
+    }, 1); // Reducido de 10ms
     
     if (doScroll) {
         scrollToBottom();
@@ -1413,7 +1426,7 @@ function outputMediaMessage(message, doScroll = true) {
         video.addEventListener('pause', function() {
             playIcon.style.opacity = '0.8';
         });
-        video.addEventListener('ended', function() {
+         video.addEventListener('ended', function() {
             playIcon.style.opacity = '0.8';
         });
         
@@ -1573,7 +1586,7 @@ function outputMediaMessage(message, doScroll = true) {
     // Activar animación de entrada
     setTimeout(() => {
         div.classList.add('active');
-    }, 10);
+    }, 1); // Reducido de 10ms
 
     // Solo hacer scroll si se solicita
     if (doScroll) {
@@ -2126,3 +2139,319 @@ function showTransferNotification(message, type = 'info') {
         }, 300);
     }, 5000);
 }
+
+// Añadir estilos para el nuevo selector de emojis
+document.head.insertAdjacentHTML('beforeend', `
+<style>
+  /* Estilos para Emoji Picker Button */
+  /* .emoji-picker-container eliminado */
+  
+  #emoji-btn { /* MODIFICADO: Antes .emoji-picker-button */
+    background-color: var(--primary-color); /* NUEVO: Fondo como antes */
+    color: #fff; /* NUEVO: Color de icono/texto */
+    border: none;
+    font-size: 1.2rem; /* MODIFICADO: Tamaño como antes */
+    cursor: pointer;
+    padding: 5px 12px; /* MODIFICADO: Padding como antes */
+    border-radius: 5px; /* MODIFICADO: Bordes como antes */
+    transition: background-color 0.2s; /* Mantenemos transición suave */
+    margin: 0 5px; /* NUEVO: Margen como antes */
+    display: flex; /* NUEVO: Para centrar icono */
+    align-items: center; /* NUEVO: Para centrar icono */
+    justify-content: center; /* NUEVO: Para centrar icono */
+  }
+  
+  #emoji-btn:hover { /* MODIFICADO: Antes .emoji-picker-button:hover */
+    background-color: #4a47a3; /* NUEVO: Hover como antes */
+  }
+
+  #emoji-btn i { /* NUEVO: Estilos para el icono dentro del botón */
+    color: #fff; /* Asegurar color del icono */
+  }
+  
+  #emoji-picker { /* MODIFICADO: Antes .emoji-picker-popup */
+    position: absolute;
+    /* bottom, left, right, top son manejados por JS o media query específica */
+    max-width: 300px; /* MODIFICADO */
+    width: auto; /* AÑADIDO: permite encogerse, limitado por max-width */
+    background-color: #fff; /* MODIFICADO: Fondo blanco estándar */
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 10px;
+    display: none; /* Se cambia a 'grid' o 'block' con .active */
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  #emoji-picker.active { /* MODIFICADO: Antes .emoji-picker-popup.active */
+    display: block; /* MODIFICADO: De grid a block */
+  }
+  
+  .emoji-categories {
+    display: flex;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .emoji-category {
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 4px;
+  }
+  
+  .emoji-category:hover,
+  .emoji-category.active {
+    background-color: #f0f0f0;
+  }
+  
+  .emoji-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%; /* AÑADIDO */
+    box-sizing: border-box; /* AÑADIDO */
+  }
+  
+  .emoji-item {
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 3px; /* MODIFICADO: Reducido de 5px */
+    border-radius: 4px;
+    margin: 2px;
+    transition: background-color 0.2s;
+    box-sizing: border-box; /* AÑADIDO */
+    text-align: center; /* AÑADIDO */
+  }
+  
+  .emoji-item:hover {
+    background-color: #f0f0f0;
+  }
+  
+  /* Ajuste para móviles */
+  @media (max-width: 768px) {
+    #emoji-picker {
+      max-width: 270px; /* MODIFICADO: Sin !important */
+      width: calc(100vw - 40px); /* MODIFICADO: Sin !important, 20px margen total a cada lado */
+      /* left, right, top, bottom serán manejados por JS para consistencia */
+    }
+    
+    .emoji-item {
+      font-size: 1.3rem;
+      padding: 2px; /* MODIFICADO: Reducido */
+    }
+  }
+</style>
+`);
+
+// Función para inicializar el selector de emojis
+function initEmojiPicker() {
+    // Comprobar si el formulario de chat existe
+    const chatForm = document.getElementById('chat-form');
+    if (!chatForm) return;
+    
+    // Buscar el campo de entrada de mensajes
+    const messageInput = document.getElementById('msg');
+    if (!messageInput) return;
+    
+    // Buscar el botón de emojis existente
+    const emojiBtn = document.getElementById('emoji-btn');
+    if (!emojiBtn) {
+        console.log('No se encontró el botón de emojis existente (#emoji-btn)');
+        return;
+    }
+    
+    // Obtener el contenedor de emojis existente o crear uno nuevo
+    let emojiPicker = document.getElementById('emoji-picker');
+    if (!emojiPicker) {
+        // Si no existe, lo creamos
+        emojiPicker = document.createElement('div');
+        emojiPicker.id = 'emoji-picker';
+        emojiPicker.className = 'emoji-picker';
+        document.body.appendChild(emojiPicker);
+    }
+    
+    // Limpiar el contenedor de emojis existente
+    emojiPicker.innerHTML = '';
+    
+    // Añadir estructura de categorías y rejilla de emojis
+    emojiPicker.innerHTML = `
+        <div class="emoji-categories">
+            <span class="emoji-category active" data-category="smileys">😀</span>
+            <span class="emoji-category" data-category="people">👋</span>
+            <span class="emoji-category" data-category="animals">🐶</span>
+            <span class="emoji-category" data-category="food">🍎</span>
+            <span class="emoji-category" data-category="travel">🚗</span>
+            <span class="emoji-category" data-category="activities">⚽</span>
+            <span class="emoji-category" data-category="objects">💡</span>
+            <span class="emoji-category" data-category="symbols">❤️</span>
+            <span class="emoji-category" data-category="flags">🏁</span>
+        </div>
+        <div class="emoji-grid" id="emoji-grid"></div>
+    `;
+    
+    // Definir grupos de emojis
+    const emojiGroups = {
+        smileys: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'],
+        people: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦿', '🦶', '👂', '🦻', '👃', '🧠', '🫀', '🫁', '🦷', '🦴', '👀', '👁️', '👅', '👄', '💋', '🩸', '👶', '🧒', '👦', '👧', '🧑', '👱', '👨', '🧔', '👨‍🦰', '👨‍🦱', '👨‍🦳', '👨‍🦲', '👩', '👩‍🦰', '🧑‍🦰', '👩‍🦱', '🧑‍🦱', '👩‍🦳', '🧑‍🦳', '👩‍🦲', '🧑‍🦲', '👱‍♀️', '👱‍♂️', '🧓', '👴', '👵', '🙍', '🙍‍♂️', '🙍‍♀️', '🙎', '🙎‍♂️', '🙎‍♀️', '🙅', '🙅‍♂️', '🙅‍♀️'],
+        animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷️', '🕸️', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐕‍🦺', '🐈', '🐈‍⬛', '🪶', '🐓', '🦃', '🦤', '🦚', '🦜'],
+        food: ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥫', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚', '🍘', '🍥', '🥠', '🥮', '🍢', '🍡', '🍧', '🍨', '🍦', '🥧', '🧁', '🍰', '🎂', '🍮', '🍭', '🍬', '🍫', '🍿', '🍩', '🍪', '🌰', '🥜'],
+        travel: ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🦯', '🦽', '🦼', '🛴', '🚲', '🛵', '🏍️', '🛺', '🚨', '🚔', '🚍', '🚘', '🚖', '🚡', '🚠', '🚟', '🚃', '🚋', '🚞', '🚝', '🚄', '🚅', '🚈', '🚂', '🚆', '🚇', '🚊', '🚉', '✈️', '🛫', '🛬', '🛩️', '💺', '🛰️', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛥️', '🛳️', '⛴️', '🚢', '⚓', '🪝', '⛽', '🚧', '🚦', '🚥', '🚏', '🗺️', '🗿', '🗽', '🗼', '🏰', '🏯', '🏛️', '⛪', '🕌', '🕍', '🕋', '⛩️', '🛤️', '🛣️', '🗾', '🎑', '🏞️', '🌅', '🌄', '🌠', '🎇', '🎆', '🌇', '🌆', '🏙️', '🌃', '🌌', '🌉', '🌁'],
+        activities: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸️', '🥌', '🎿', '⛷️', '🏂', '🪂', '🏋️', '🏋️‍♂️', '🏋️‍♀️', '🤼', '🤼‍♂️', '🤼‍♀️', '🤸', '🤸‍♂️', '🤸‍♀️', '⛹️', '⛹️‍♂️', '⛹️‍♀️', '🤺', '🤾', '🤾‍♂️', '🤾‍♀️', '🏌️', '🏌️‍♂️', '🏌️‍♀️', '🏇', '🧘', '🧘‍♂️', '🧘‍♀️', '🏄', '🏄‍♂️', '🏄‍♀️', '🏊', '🏊‍♂️', '🏊‍♀️', '🤽', '🤽‍♂️', '🤽‍♀️', '🚣', '🚣‍♂️', '🚣‍♀️', '🧗', '🧗‍♂️', '🧗‍♀️', '🚵', '🚵‍♂️', '🚵‍♀️', '🚴', '🚴‍♂️', '🚴‍♀️', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🏵️', '🎗️', '🎫', '🎟️', '🎪', '🤹', '🤹‍♂️', '🤹‍♀️', '🎭', '🩰', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🪘', '🎷', '🎺', '🪗', '🎸', '🪕', '🎻', '🎲', '♟️', '🎯', '🎳', '🎮', '🎰', '🧩'],
+        objects: ['💡', '🔦', '🪔', '🗑️', '🎌', '🚩', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️', '📱', '📲', '💻', '⌨️', '🖥️', '🖨️', '🖱️', '🖲️', '🕹️', '🗜️', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽️', '🎞️', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙️', '🎚️', '🎛️', '🧭', '⏱️', '⏲️', '⏰', '🕰️', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯️', '🪔', '🧯', '🛢️', '💸', '💵', '💴', '💶', '💷', '🪙', '💰', '💳', '💎', '⚖️', '🪜', '🧰', '🪛', '🔧', '🔨', '⚒️', '🛠️', '🧲', '🪝', '🪓', '⛏️', '🪚', '🔩', '⚙️', '🪤', '🧱', '⛓️', '🧲', '🔪', '🪒', '🔫', '💣', '🧨', '🪓', '🔪', '🗡️', '⚔️', '🛡️', '🚬', '⚰️', '⚱️', '🏺', '🔮', '📿', '🧿', '💈', '⚗️', '🔭', '🔬', '🕳️', '🩹', '🩺', '💊', '💉', '🩸', '🧬', '🦠', '🧫', '🧪', '🌡️', '🧹', '🪣', '🧺', '🧻', '🚽', '🪠', '🧸', '🪆', '🪄', '🧴', '🪥', '🧽', '🪣', '🧯', '🛌', '🔑', '🗝️', '🪑', '🛋️', '🪞', '🪟', '🛏️', '🛌', '🚪', '🪜'],
+        symbols: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🤎', '🖤', '🤍', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️', '🆘', '❌', '⭕', '🛑', '⛔', '📛', '🚫', '💯', '💢', '♨️', '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗', '❕', '❓', '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️', '🔰', '♻️', '✅', '🈯', '💹', '❇️', '✳️', '❎', '🌐', '💠', 'Ⓜ️', '🌀'],
+        flags: ['🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️', '🇦🇫', '🇦🇽', '🇦🇱', '🇩🇿', '🇦🇸', '🇦🇩', '🇦🇴', '🇦🇮', '🇦🇶', '🇦🇬', '🇦🇷', '🇦🇲', '🇦🇼', '🇦🇺', '🇦🇹', '🇦🇿', '🇧🇸', '🇧🇭', '🇧🇩', '🇧🇧', '🇧🇾', '🇧🇪', '🇧🇿', '🇧🇯', '🇧🇲', '🇧🇹', '🇧🇴', '🇧🇦', '🇧🇼', '🇧🇷', '🇮🇴', '🇻🇬', '🇧🇳', '🇧🇬', '🇧🇫', '🇧🇮', '🇰🇭', '🇨🇲', '🇨🇦', '🇮🇨', '🇨🇻', '🇧🇶', '🇰🇾', '🇨🇫', '🇹🇩', '🇨🇱', '🇨🇳', '🇨🇽', '🇨🇨', '🇨🇴', '🇰🇲', '🇨🇬', '🇨🇩', '🇨🇰', '🇨🇷', '🇨🇮', '🇭🇷', '🇨🇺', '🇨🇼', '🇨🇾', '🇨🇿', '🇩🇰', '🇩🇯', '🇩🇲', '🇩🇴', '🇪🇨', '🇪🇬', '🇸🇻', '🇬🇶', '🇪🇷', '🇪🇪', '🇪🇹', '🇪🇺', '🇫🇰', '🇫🇴', '🇫🇯', '🇫🇮', '🇫🇷', '🇬🇫', '🇵🇫', '🇹🇫', '🇬🇦', '🇬🇲', '🇬🇪', '🇩🇪', '🇬🇭', '🇬🇮', '🇬🇷', '🇬🇱', '🇬🇩', '🇬🇵', '🇬🇺', '🇬🇹', '🇬🇬', '🇬🇳', '🇬🇼', '🇬🇾', '🇭🇹', '🇭🇳', '🇭🇰', '🇭🇺', '🇮🇸', '🇮🇳', '🇮🇩', '🇮🇷', '🇮🇶', '🇮🇪', '🇮🇲', '🇮🇱', '🇮🇹', '🇯🇲', '🇯🇵', '🎌', '🇯🇪', '🇯🇴', '🇰🇿', '🇰🇪', '🇰🇮', '🇽🇰', '🇰🇼', '🇰🇬', '🇱🇦', '🇱🇻', '🇱🇧', '🇱🇸', '🇱🇷', '🇱🇾', '🇱🇮', '🇱🇹', '🇱🇺', '🇲🇴', '🇲🇰', '🇲🇬', '🇲🇼', '🇲🇾', '🇲🇻', '🇲🇱', '🇲🇹', '🇲🇭', '🇲🇶', '🇲🇷', '🇲🇺', '🇾🇹', '🇲🇽', '🇫🇲', '🇲🇩', '🇲🇨', '🇲🇳', '🇲🇪', '🇲🇸', '🇲🇦', '🇲🇿', '🇲🇲', '🇳🇦', '🇳🇷', '🇳🇵', '🇳🇱']
+    };
+    
+    // Inicializar con la primera categoría
+    const emojiGrid = document.getElementById('emoji-grid');
+    if (emojiGrid) {
+        populateEmojiGrid(emojiGrid, emojiGroups.smileys);
+    }
+    
+    // Manejador para el clic en las categorías
+    const emojiCategories = document.querySelectorAll('.emoji-category');
+    emojiCategories.forEach(category => {
+        category.addEventListener('click', function() {
+            // Remover la clase 'active' de todas las categorías
+            emojiCategories.forEach(cat => cat.classList.remove('active'));
+            
+            // Añadir la clase 'active' a la categoría actual
+            this.classList.add('active');
+            
+            // Obtener la categoría seleccionada
+            const categoryName = this.getAttribute('data-category');
+            
+            // Poblar la rejilla con los emojis de esa categoría
+            populateEmojiGrid(emojiGrid, emojiGroups[categoryName]);
+        });
+    });
+    
+    // Función para llenar la rejilla con los emojis
+    function populateEmojiGrid(grid, emojis) {
+        if (!grid) return;
+        
+        // Limpiar la rejilla
+        grid.innerHTML = '';
+        
+        // Añadir cada emoji a la rejilla
+        emojis.forEach(emoji => {
+            const emojiSpan = document.createElement('span');
+            emojiSpan.className = 'emoji-item';
+            emojiSpan.textContent = emoji;
+            emojiSpan.title = emoji;
+            
+            // Añadir manejador de clic para insertar el emoji
+            emojiSpan.addEventListener('click', function() {
+                insertEmojiAtCursor(messageInput, emoji);
+            });
+            
+            grid.appendChild(emojiSpan);
+        });
+    }
+    
+    // Función para posicionar el popup correctamente
+    function positionEmojiPicker() {
+        const btnRect = emojiBtn.getBoundingClientRect();
+        const pickerElement = emojiPicker;
+        const margin = 5; // Pequeño margen para que no esté pegado al botón o borde
+
+        // Obtener dimensiones actuales del picker (debe estar visible o tener dimensiones intrínsecas)
+        const pickerWidth = pickerElement.offsetWidth;
+        const pickerHeight = pickerElement.offsetHeight;
+
+        // Posición deseada: arriba y a la izquierda del botón
+        // El punto de anclaje es la esquina superior izquierda del picker
+        let desiredTop = btnRect.top - pickerHeight - margin;
+        let desiredLeft = btnRect.left - pickerWidth - margin;
+
+        // Ajustar si se sale por el borde superior de la ventana
+        if (desiredTop < margin) {
+            desiredTop = margin;
+        }
+
+        // Ajustar si se sale por el borde izquierdo de la ventana
+        if (desiredLeft < margin) {
+            desiredLeft = margin;
+        }
+        
+        // En pantallas muy pequeñas, si después de ajustar a la izquierda aún se sale por la derecha
+        // (esto pasaría si el picker es más ancho que la pantalla menos los márgenes)
+        // ajustamos el ancho del picker si es necesario, o lo pegamos también a la derecha.
+        // Por ahora, nos enfocamos en el posicionamiento arriba-izquierda y los ajustes de borde.
+        // La media query ya limita el width en móviles.
+
+        pickerElement.style.top = desiredTop + 'px';
+        pickerElement.style.left = desiredLeft + 'px';
+        pickerElement.style.right = 'auto'; // Aseguramos que 'right' no interfiera
+        pickerElement.style.bottom = 'auto'; // Aseguramos que 'bottom' no interfiera
+    }
+    
+    // Manejador para abrir/cerrar el selector
+    emojiBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Primero, cambia el estado de visibilidad del selector
+        emojiPicker.classList.toggle('active');
+        
+        // Si el selector ahora está activo (visible), entonces calcula su posición
+        if (emojiPicker.classList.contains('active')) {
+          positionEmojiPicker();
+        }
+        
+        // Cerrar cuando se hace clic fuera del selector
+        function closePopup(event) {
+            if (!emojiPicker.contains(event.target) && event.target !== emojiBtn) {
+                emojiPicker.classList.remove('active');
+                document.removeEventListener('click', closePopup);
+            }
+        }
+        
+        document.addEventListener('click', closePopup);
+    });
+    
+    // Reposicionar cuando se redimensiona la ventana
+    window.addEventListener('resize', function() {
+        if (emojiPicker.classList.contains('active')) {
+            positionEmojiPicker();
+        }
+    });
+    
+    // Función para insertar el emoji en la posición actual del cursor
+    function insertEmojiAtCursor(input, emoji) {
+        if (!input) return;
+        
+        // Obtener la posición actual del cursor
+        const startPos = input.selectionStart;
+        const endPos = input.selectionEnd;
+        
+        // Obtener el valor actual del campo de entrada
+        const currentValue = input.value;
+        
+        // Insertar el emoji en la posición del cursor
+        input.value = currentValue.substring(0, startPos) + emoji + currentValue.substring(endPos);
+        
+        // Mover el cursor después del emoji insertado
+        const newCursorPos = startPos + emoji.length;
+        input.setSelectionRange(newCursorPos, newCursorPos);
+        
+        // Enfocar el campo de entrada
+        input.focus();
+        
+        // Actualizar el contador de caracteres si existe
+        const counter = document.querySelector('.char-counter span');
+        if (counter) counter.textContent = input.value.length;
+        
+        // Cerrar el selector
+        emojiPicker.classList.remove('active');
+    }
+}
+
+// Inicializar el selector de emojis cuando el DOM esté cargado
+document.addEventListener('DOMContentLoaded', initEmojiPicker);

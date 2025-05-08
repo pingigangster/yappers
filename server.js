@@ -1497,7 +1497,7 @@ io.on('connection', async (socket) => {
             if (!data || !data.fileBuffer || !data.fileName || typeof callback !== 'function') {
                  console.error('Llamada inválida a mediaMessage:', { hasData: !!data, hasBuffer: !!data?.fileBuffer, hasFileName: !!data?.fileName, hasCallback: typeof callback === 'function' });
                  return callback({ success: false, error: 'Datos multimedia o callback inválidos' });
-            }
+                }
 
              if (!Buffer.isBuffer(data.fileBuffer)) {
                  console.error('Error: fileBuffer no es un Buffer en mediaMessage. Tipo recibido:', typeof data.fileBuffer);
@@ -1509,64 +1509,64 @@ io.on('connection', async (socket) => {
             const operationTimeout = setTimeout(() => {
                 console.error(`Timeout procesando mediaMessage para ${data.fileName} de ${socket.id}`);
                 if (callback) { 
-                    callback({
-                        success: false,
+                    callback({ 
+                        success: false, 
                         error: 'Tiempo de espera agotado en el servidor al procesar el archivo'
                     });
-                    callback = null; 
+                    callback = null;
                 }
             }, 120000); 
-
+            
             const users = await userController.getConnectedUsers();
             const user = users.find(u => u.socketId === socket.id);
-
+            
             if (!user) {
                  clearTimeout(operationTimeout);
                  console.error(`Usuario no encontrado para socket ${socket.id} al procesar mediaMessage`);
                  return callback({ success: false, error: 'Usuario no encontrado o no autenticado' });
             }
 
-            const validatedText = data.text && data.text.length > MAX_MESSAGE_LENGTH
-                ? data.text.substring(0, MAX_MESSAGE_LENGTH)
-                : data.text || '';
-
+                const validatedText = data.text && data.text.length > MAX_MESSAGE_LENGTH 
+                    ? data.text.substring(0, MAX_MESSAGE_LENGTH) 
+                    : data.text || '';
+                
             const result = await messageController.saveMediaMessage(user.username, socket.id, {
                 fileBuffer: data.fileBuffer,
-                fileType: data.fileType,
-                fileName: data.fileName,
+                    fileType: data.fileType,
+                    fileName: data.fileName,
                 fileSize: data.fileSize || data.fileBuffer.length,
                 text: validatedText
             });
 
-            clearTimeout(operationTimeout);
-
+                clearTimeout(operationTimeout);
+                
              if (!callback) {
                 console.warn(`Callback inválido después de procesar mediaMessage para ${data.fileName}`);
-                return;
-             }
+                return; 
+            }
 
             if (result.success && result.confirmedMessage) {
                 console.log(`Archivo ${data.fileName} guardado y mensaje creado (${result.confirmedMessage._id}). Emitiendo broadcast.`);
                 socket.broadcast.emit('mediaMessage', result.confirmedMessage);
-                callback({
-                    success: true,
+                        callback({
+                            success: true, 
                     confirmedMessage: result.confirmedMessage
-                });
-            } else {
+                        });
+                    } else {
                 console.error(`Error al guardar mediaMessage para ${data.fileName}:`, result.error);
-                callback({
-                    success: false,
+                    callback({ 
+                        success: false, 
                     error: result.error || 'Error desconocido al guardar el archivo en el servidor'
-                });
-            }
+                    });
+                }
         } catch (error) {
             console.error('Error general en el handler de mediaMessage:', error);
-             if (callback && typeof callback === 'function') {
-                 callback({
-                     success: false,
+            if (callback && typeof callback === 'function') {
+                callback({ 
+                    success: false, 
                      error: error.message || 'Error inesperado en el servidor al procesar archivo'
-                 });
-             }
+                });
+            }
         }
     });
 
@@ -1985,7 +1985,7 @@ app.delete('/api/admin/users', (req, res) => {
     // Agregar la instancia io a la solicitud para que el controlador pueda usarla
     req.io = io;
     userController.deleteAllUsers(req, res);
-});
+}); 
 
 // Ruta comodín final - IMPORTANTE: debe ir después de todas las rutas específicas
 // Esta ruta captura cualquier acceso que aún contenga 'chat.html' y lo redirige a /chat

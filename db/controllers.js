@@ -566,7 +566,7 @@ const messageController = {
 
             console.log(`Guardando archivo en GridFS: ${fileName}, Tipo: ${fileType}, Tamaño: ${fileSize} bytes`);
 
-            const fileId = new mongoose.Types.ObjectId();
+                    const fileId = new mongoose.Types.ObjectId();
             let contentType = fileType;
              // Add more specific content type mapping if needed based on fileType or fileName extension
              if (fileType === 'image' && !contentType.includes('/')) contentType = 'image/jpeg'; // Default image type
@@ -581,27 +581,27 @@ const messageController = {
              }
 
 
-            const metadata = {
-                username,
-                userId,
+                        const metadata = {
+                            username,
+                            userId,
                 originalName: fileName,
                 clientFileType: fileType
             };
-
+                        
             const uploadStream = gridFSBucket.openUploadStreamWithId(fileId, fileName || `file_${Date.now()}`, {
-                contentType: contentType,
-                metadata: metadata
-            });
-
-            const readableStream = new stream.Readable();
+                            contentType: contentType,
+                            metadata: metadata
+                        });
+                        
+                        const readableStream = new stream.Readable();
             readableStream.push(fileBuffer);
             readableStream.push(null);
 
             const pipelineAsync = promisify(stream.pipeline);
             await pipelineAsync(readableStream, uploadStream);
-
-            console.log(`Archivo guardado exitosamente en GridFS con ID: ${fileId}`);
-
+                        
+                        console.log(`Archivo guardado exitosamente en GridFS con ID: ${fileId}`);
+                        
             const savedMessage = new Message({
                 text: text || '',
                 username,
@@ -614,7 +614,7 @@ const messageController = {
                 mediaId: fileId.toString(),
                 createdAt: new Date()
             });
-
+            
             await savedMessage.save();
             console.log(`Mensaje guardado en DB con ID: ${savedMessage._id}, asociado a mediaId: ${fileId}`);
 
@@ -630,7 +630,7 @@ const messageController = {
                  mediaId: savedMessage.mediaId,
                  createdAt: savedMessage.createdAt
             };
-
+            
             return { success: true, confirmedMessage: confirmedMessage };
 
         } catch (error) {

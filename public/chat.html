@@ -81,69 +81,8 @@
             opacity: 1;
         }
         
-        /* Estilos para el selector de emojis */
-        .btn-emoji {
-            background-color: var(--primary-color);
-            color: #fff;
-            border: none;
-            padding: 5px 12px;
-            font-size: 1.2rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 5px;
-            margin: 0 5px;
-        }
-        
-        .btn-emoji i {
-            color: #fff;
-        }
-        
-        .btn-emoji:hover {
-            background-color: #4a47a3; /* Versión más oscura del color primario */
-        }
-        
-        .btn-emoji:hover i {
-            color: #fff;
-        }
-        
-        .emoji-picker {
-            position: absolute;
-            bottom: 70px;
-            left: auto;
-            right: auto; 
-            transform: translateX(-40%);
-            background-color: var(--dark-color);
-            border-radius: 5px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            width: 300px;
-            max-height: 200px;
-            overflow-y: auto;
-            padding: 10px;
-            display: none;
-            z-index: 100;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 5px;
-        }
-        
-        .emoji-picker.active {
-            display: grid;
-        }
-        
-        .emoji-item {
-            font-size: 1.5rem;
-            text-align: center;
-            cursor: pointer;
-            padding: 5px;
-            border-radius: 3px;
-            transition: background-color 0.2s;
-        }
-        
-        .emoji-item:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
+        /* Estilos para el selector de emojis ELIMINADOS */
+
     </style>
     <script>
         // Variables globales que serán manejadas por main.js
@@ -300,71 +239,5 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.11.2/qs.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="js/main.js"></script>
-    <script>
-        // Inicializar selector de emojis
-        document.addEventListener('DOMContentLoaded', function() {
-            const emojiBtn = document.getElementById('emoji-btn');
-            const emojiPicker = document.getElementById('emoji-picker');
-            const msgInput = document.getElementById('msg');
-            
-            // Lista de emojis populares
-            const emojis = [
-                '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
-                '🙂', '🙃', '😉', '😌', '😍', '😘', '😗', '😙', '😚', '😋',
-                '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '😏',
-                '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫',
-                '😩', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '😱',
-                '👍', '👎', '👏', '🙌', '👐', '🤲', '🤝', '👊', '✌️', '❤️',
-                '💯', '🔥', '⭐', '🎉', '🎊', '🎁', '👻', '💩', '🤡', '👽'
-            ];
-            
-            // Crear elementos de emojis
-            emojis.forEach(emoji => {
-                const span = document.createElement('span');
-                span.classList.add('emoji-item');
-                span.textContent = emoji;
-                
-                // Al hacer clic en un emoji, añadirlo al mensaje
-                span.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    msgInput.value += emoji;
-                    msgInput.focus();
-                    emojiPicker.classList.remove('active');
-                });
-                
-                emojiPicker.appendChild(span);
-            });
-            
-            // Asegurarnos de posicionar el desplegable encima del botón
-            function positionEmojiPicker() {
-                const btnRect = emojiBtn.getBoundingClientRect();
-                emojiPicker.style.bottom = (window.innerHeight - btnRect.top + 10) + 'px';
-                emojiPicker.style.left = (btnRect.left + (btnRect.width / 2)) + 'px';
-            }
-            
-            // Mostrar/ocultar selector de emojis al hacer clic en el botón
-            emojiBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                positionEmojiPicker();
-                emojiPicker.classList.toggle('active');
-            });
-            
-            // Cerrar el selector de emojis al hacer clic fuera de él
-            document.addEventListener('click', function(event) {
-                if (!emojiPicker.contains(event.target) && event.target !== emojiBtn) {
-                    emojiPicker.classList.remove('active');
-                }
-            });
-            
-            // Reposicionar cuando se redimensiona la ventana
-            window.addEventListener('resize', function() {
-                if (emojiPicker.classList.contains('active')) {
-                    positionEmojiPicker();
-                }
-            });
-        });
-    </script>
 </body>
 </html> 
