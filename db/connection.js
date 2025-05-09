@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-// Configuración de la conexión a MongoDB
-const MONGO_URI = 'mongodb://admin:patata123@localhost:27017/chatapp?authSource=admin';
+// Configuración de la conexión a MongoDBa
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/chatapp';
 
 // Opciones de conexión mejoradas para archivos grandes
 const options = {
