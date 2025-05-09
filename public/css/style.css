@@ -1,0 +1,2054 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --primary-color: #6c5ce7;
+    --primary-light: #a29bfe;
+    --secondary-color: #00b894;
+    --dark-color: #2d3436;
+    --light-color: #f9f9f9;
+    --danger-color: #e74c3c;
+    --shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background: #f5f7fa;
+    color: var(--dark-color);
+    transition: var(--transition);
+    min-height: 100vh;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Fondo especial para la página de inicio */
+body:has(.join-container) {
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+}
+
+/* Alternativa para navegadores sin soporte para :has() */
+body.join-page {
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.chat-container {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #fff;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    border-radius: 0;
+}
+
+.chat-header, .join-header {
+    background: var(--primary-color);
+    color: #fff;
+    padding: 15px 20px;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    margin: 0;
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 0;
+    width: 100vw;
+}
+
+.chat-header h1, .join-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#username-display {
+    font-weight: 600;
+    font-size: 16px;
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 5px 10px;
+    border-radius: 20px;
+    transition: var(--transition);
+}
+
+#username-display:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.chat-main {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    flex: 1;
+    overflow: hidden;
+    background-color: #fff;
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+}
+
+.sidebar {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 15px;
+    overflow-y: auto;
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    width: 100%;
+    max-width: 250px;
+}
+
+.sidebar h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 600;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(108, 92, 231, 0.2);
+}
+
+.sidebar ul {
+    list-style: none;
+}
+
+.sidebar li {
+    padding: 12px 10px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background-color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar li:hover {
+    background-color: #fff;
+    transform: translateX(3px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.sidebar li::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background-color: var(--secondary-color);
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+.sidebar li.current-user {
+    background: linear-gradient(120deg, rgba(108, 92, 231, 0.1), rgba(108, 92, 231, 0.2));
+    border-left: 3px solid var(--primary-color);
+    font-weight: 600;
+}
+
+.sidebar li.current-user::before {
+    background-color: var(--primary-color);
+    box-shadow: 0 0 5px var(--primary-color);
+}
+
+.chat-main::-webkit-scrollbar {
+    width: 10px;
+}
+
+.chat-main::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.chat-main::-webkit-scrollbar-thumb {
+    background: var(--primary-light);
+    border-radius: 10px;
+}
+
+.chat-messages {
+    padding: 15px;
+    overflow-y: auto;
+    height: 100%;
+    margin: 0;
+    width: 100%;
+}
+
+/* Estilos para la zona de arrastrar y soltar */
+.drop-zone {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(108, 92, 231, 0.2);
+    border: 3px dashed var(--primary-color);
+    border-radius: 10px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(5px);
+    transition: var(--transition);
+    pointer-events: none;
+}
+
+.drop-zone.active {
+    display: flex;
+    animation: fadeIn 0.3s ease;
+    pointer-events: auto;
+}
+
+.drop-zone-content {
+    text-align: center;
+    color: var(--primary-color);
+    padding: 20px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.9);
+    box-shadow: var(--shadow);
+}
+
+.drop-zone-content i {
+    font-size: 50px;
+    margin-bottom: 15px;
+    color: var(--primary-color);
+}
+
+.drop-zone-content p {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.drop-zone-hint {
+    font-size: 14px;
+    color: #666;
+    display: block;
+    margin-top: 5px;
+}
+
+/* Estilos para imágenes y videos en mensajes */
+.message {
+    padding: 12px 15px;
+    margin-bottom: 20px;
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    overflow-wrap: break-word;
+    position: relative;
+    max-width: 80%;
+    width: auto;
+    display: inline-block;
+    transition: var(--transition);
+    transform-origin: left bottom;
+    opacity: 0;
+    transform: translateY(20px);
+    float: left;
+    clear: both;
+}
+
+.message.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.message:hover {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.message.self {
+    background: linear-gradient(120deg, var(--primary-light), var(--primary-color));
+    color: #fff;
+    text-align: right;
+    float: right;
+    margin-left: auto;
+    transform-origin: right bottom;
+    box-shadow: 0 3px 10px rgba(108, 92, 231, 0.2);
+    clear: both;
+}
+
+.message .content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: 0;
+}
+
+.message.self .content {
+    align-items: flex-end;
+    width: 100%;
+}
+
+.message .text-content {
+    width: 100%;
+}
+
+.message.self .text-content {
+    text-align: right;
+    width: auto;
+    max-width: 100%;
+}
+
+.message .media-container {
+    max-width: 300px;
+    margin-top: 8px;
+    overflow: hidden;
+    border-radius: 8px;
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.message.self .media-container {
+    display: inline-block;
+    max-width: 300px;
+    width: 100%;
+    margin: 8px 0 0 0;
+}
+
+.message .media-container img,
+.message .media-container video {
+    max-width: 100%;
+    border-radius: 8px;
+    transition: var(--transition);
+    cursor: pointer;
+    display: inline-block;
+    height: auto;
+    object-fit: contain;
+}
+
+.message .media-container video {
+    max-height: 300px;
+    background-color: #000;
+}
+
+.message .media-container img:hover,
+.message .media-container video:hover {
+    transform: scale(1.02);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.message .media-container .video-play-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 40px;
+    opacity: 0.8;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    transition: var(--transition);
+}
+
+.message .media-container:hover .video-play-icon {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.message .meta {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
+    width: auto;
+}
+
+.message.self .meta {
+    color: #fff;
+    justify-content: flex-end;
+}
+
+.message.self .meta span {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.message .meta span {
+    color: #999;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+/* Triángulo decorativo reposicionado para la nueva estructura */
+.message::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 10px;
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid #fff;
+    transition: var(--transition);
+}
+
+.message.self::after {
+    left: auto;
+    right: 10px;
+    border-top: 10px solid var(--primary-color);
+}
+
+.chat-form-container {
+    padding: 15px;
+    background-color: #fff;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    width: calc(100vw - 250px);
+    margin-left: 250px;
+}
+
+#chat-form {
+    display: flex;
+    align-items: center;
+}
+
+/* Estilos para el botón de subir imagen */
+.btn-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--secondary-color);
+    color: white;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    margin-left: 10px;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: 0 3px 10px rgba(0, 184, 148, 0.2);
+}
+
+.btn-image:hover {
+    background-color: #00a38c;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 184, 148, 0.3);
+}
+
+.btn-image i {
+    font-size: 20px;
+}
+
+.btn {
+    cursor: pointer;
+    padding: 15px 25px;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 30px;
+    margin-left: 10px;
+    font-size: 16px;
+    font-weight: 500;
+    transition: var(--transition);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 10px rgba(108, 92, 231, 0.2);
+}
+
+.btn:hover {
+    background: #5d4ddb;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(108, 92, 231, 0.3);
+}
+
+.btn:active {
+    transform: translateY(-1px);
+}
+
+/* Estilos para la página de inicio */
+.join-container {
+    width: 500px;
+    height: auto;
+    max-width: 90%;
+    margin: 50px auto;
+    padding: 0;
+    background-color: #fff;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    border-radius: 15px;
+    overflow: hidden;
+    position: relative;
+    animation: fadeIn 0.5s ease;
+}
+
+.join-main {
+    padding: 40px 30px;
+}
+
+.join-main .form-control {
+    margin-bottom: 25px;
+}
+
+.join-main label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--dark-color);
+}
+
+.join-main input[type='text'] {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    background-color: #f5f5f5;
+    transition: var(--transition);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+    outline: none;
+}
+
+.join-main input[type='text']:focus {
+    background-color: #fff;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.join-main .btn {
+    margin-top: 20px;
+    width: 100%;
+    margin-left: 0;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease forwards;
+}
+
+/* Animaciones para el botón */
+.btn:hover {
+    animation: pulse 1.5s infinite;
+}
+
+/* Media queries */
+@media (max-width: 700px) {
+    .chat-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .chat-main {
+        grid-template-columns: 1fr;
+    }
+    
+    .sidebar {
+        display: none;
+    }
+    
+    .message {
+        padding: 10px;
+        margin-bottom: 10px;
+        max-width: 90%;
+        width: auto;
+    }
+    
+    .message.self {
+        max-width: 90%;
+        width: auto;
+    }
+    
+    .message .media-container img,
+    .message .media-container video {
+        max-width: 100%;
+    }
+    
+    /* Mostrar la barra lateral en dispositivos móviles */
+    .show-sidebar .sidebar {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 80%;
+        height: 100%;
+        background: white;
+        z-index: 100;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .chat-form-container {
+        margin-left: 0;
+        width: 100vw;
+    }
+}
+
+/* Estilos para el tooltip de pegar imágenes */
+.input-wrapper {
+    position: relative;
+    flex: 1;
+    margin-bottom: 10px;
+}
+
+.input-wrapper input[type='text'] {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    background-color: #f5f5f5;
+    transition: var(--transition);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+    outline: none;
+}
+
+.input-wrapper input[type='text']:focus {
+    background-color: #fff;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.input-wrapper::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    white-space: nowrap;
+    margin-bottom: 5px;
+}
+
+.input-wrapper:hover::after {
+    opacity: 1;
+}
+
+/* Modal para imagen ampliada */
+.img-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.img-modal.active {
+    display: flex;
+    opacity: 1;
+}
+
+.img-modal .modal-content {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.img-modal.active .modal-content {
+    transform: scale(1);
+}
+
+.modal-content img,
+.modal-content video {
+    max-width: 100%;
+    max-height: 90vh;
+    display: block;
+}
+
+.modal-content video {
+    background-color: #000;
+    max-width: 100%;
+    max-height: 80vh;
+    display: block;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+}
+
+/* Asegurar que los controles sean más grandes en el modal */
+.modal-content video::-webkit-media-controls {
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 0 0 8px 8px;
+}
+
+.modal-content video::-webkit-media-controls-panel {
+    padding: 5px 10px;
+}
+
+.modal-content video::-webkit-media-controls-play-button,
+.modal-content video::-webkit-media-controls-volume-slider,
+.modal-content video::-webkit-media-controls-mute-button,
+.modal-content video::-webkit-media-controls-timeline,
+.modal-content video::-webkit-media-controls-fullscreen-button {
+    opacity: 0.9;
+    transition: opacity 0.3s;
+}
+
+.img-modal .close-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: white;
+    font-size: 30px;
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 101;
+}
+
+.img-modal .close-btn:hover {
+    transform: rotate(90deg);
+}
+
+/* Media queries */
+@media (max-width: 900px) {
+    .chat-main {
+        grid-template-columns: 200px 1fr;
+    }
+    
+    .sidebar {
+        max-width: 200px;
+    }
+    
+    .chat-form-container {
+        margin-left: 200px;
+        width: calc(100vw - 200px);
+    }
+    
+    .message {
+        padding: 12px;
+    }
+}
+
+/* Para pantallas muy pequeñas */
+@media (max-width: 480px) {
+    .chat-header h1 {
+        font-size: 1.1rem;
+        text-align: center;
+        width: 100%;
+    }
+    
+    .user-info {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    
+    #username-display {
+        font-size: 0.8rem;
+    }
+    
+    .chat-form-container {
+        padding: 10px;
+    }
+    
+    .btn {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+    }
+    
+    .btn-image {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .chat-main {
+        height: calc(100% - 110px);
+    }
+}
+
+/* Para tablets en orientación vertical */
+@media (max-width: 768px) and (orientation: portrait) {
+    .chat-main {
+        grid-template-columns: 1fr;
+    }
+    
+    .sidebar {
+        display: none;
+    }
+    
+    .show-sidebar .sidebar {
+        display: block;
+    }
+    
+    .menu-toggle {
+        display: block;
+    }
+}
+
+/* Para orientación apaisada en dispositivos móviles */
+@media (max-height: 500px) {
+    .chat-main {
+        height: calc(100% - 100px);
+    }
+    
+    .chat-header {
+        padding: 5px 15px;
+    }
+    
+    .chat-form-container {
+        padding: 5px 10px;
+    }
+    
+    .message {
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+}
+
+/* Mejorar responsive design */
+@media (max-width: 1200px) {
+    .chat-main {
+        grid-template-columns: 1fr 2fr;
+    }
+}
+
+@media (max-width: 900px) {
+    .chat-main {
+        grid-template-columns: 200px 1fr;
+    }
+    
+    .sidebar {
+        max-width: 200px;
+    }
+    
+    .chat-form-container {
+        margin-left: 200px;
+        width: calc(100vw - 200px);
+    }
+    
+    .message {
+        padding: 12px;
+    }
+}
+
+@media (max-width: 700px) {
+    body {
+        padding: 0;
+    }
+    
+    .chat-container {
+        height: 100vh;
+        width: 100vw;
+        border-radius: 0;
+    }
+    
+    .chat-header {
+        padding: 10px 15px;
+    }
+    
+    .chat-header h1 {
+        font-size: 1.2rem;
+    }
+    
+    .chat-main {
+        grid-template-columns: 1fr;
+        height: calc(100% - 120px);
+    }
+    
+    .sidebar {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 70%;
+        height: 100%;
+        z-index: 100;
+        background: white;
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        padding-top: 60px;
+        transition: transform 0.3s ease;
+        transform: translateX(-100%);
+    }
+    
+    .show-sidebar .sidebar {
+        display: block;
+        transform: translateX(0);
+    }
+    
+    .chat-form-container {
+        margin-left: 0;
+        width: 100vw;
+    }
+    
+    .message {
+        padding: 10px;
+        margin-bottom: 10px;
+        max-width: 90%;
+        float: left;
+    }
+    
+    .message.self {
+        max-width: 90%;
+        float: right;
+    }
+    
+    .message .meta {
+        font-size: 0.8rem;
+    }
+    
+    .message.self .media-container {
+        max-width: 250px;
+    }
+}
+
+/* Eliminar duplicaciones */
+@media (max-width: 700px) {
+    .chat-form-container {
+        margin-left: 0;
+        width: 100vw;
+    }
+    
+    .message {
+        padding: 10px;
+        margin-bottom: 10px;
+        max-width: 90%;
+        float: left;
+    }
+    
+    .message.self {
+        max-width: 90%;
+        float: right;
+    }
+    
+    .message .meta {
+        font-size: 0.8rem;
+    }
+    
+    .message.self .media-container {
+        max-width: 250px;
+    }
+}
+
+/* Eliminar duplicaciones al final del archivo */
+.message-container {
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Eliminar estas secciones duplicadas al final del archivo */
+.message.self .content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.message.self .text-content {
+    text-align: right;
+    width: 100%;
+}
+
+.message.self .media-container {
+    display: inline-block;
+    max-width: 300px;
+    width: auto;
+    margin: 8px 0 0 0;
+}
+
+.message .media-container img {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+.message .media-container video {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    max-height: 300px;
+}
+
+@media (max-width: 700px) {
+    .message.self .media-container {
+        max-width: 250px;
+    }
+}
+
+/* Estilos para archivos y botones de descarga */
+.file-container {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Botones de descarga para todos los tipos de archivos */
+@keyframes pulse-download {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+}
+
+.file-container .download-btn,
+.image-container .download-btn,
+.video-container .download-btn,
+.audio-container .download-btn {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 42px;
+    height: 42px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    opacity: 0.9;
+    transition: all 0.2s ease;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transform: scale(1);
+    overflow: hidden;
+}
+
+.file-container .download-btn i,
+.image-container .download-btn i,
+.video-container .download-btn i,
+.audio-container .download-btn i {
+    font-size: 18px;
+    transition: transform 0.3s ease;
+}
+
+.file-container .download-btn::before,
+.image-container .download-btn::before,
+.video-container .download-btn::before,
+.audio-container .download-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0),
+        rgba(255, 255, 255, 0.3),
+        rgba(255, 255, 255, 0)
+    );
+    transition: left 0.7s ease;
+}
+
+.file-container:hover .download-btn,
+.image-container:hover .download-btn,
+.video-container:hover .download-btn,
+.audio-container:hover .download-btn {
+    opacity: 1;
+    transform: scale(1.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    animation: pulse-download 2s infinite;
+}
+
+.file-container:hover .download-btn::before,
+.image-container:hover .download-btn::before,
+.video-container:hover .download-btn::before,
+.audio-container:hover .download-btn::before {
+    left: 100%;
+}
+
+.file-container:hover .download-btn i,
+.image-container:hover .download-btn i,
+.video-container:hover .download-btn i,
+.audio-container:hover .download-btn i {
+    transform: translateY(-2px);
+}
+
+/* Estilos específicos para el botón de descarga en videos */
+.video-container .download-btn {
+    bottom: 15px;
+    right: 15px;
+}
+
+/* Estilos específicos para el botón de descarga en audio */
+.audio-container .download-btn {
+    top: auto;
+    bottom: 10px;
+    right: 10px;
+}
+
+/* Estilos específicos para imágenes */
+.image-container {
+    position: relative;
+}
+
+/* Mensajes propios - ajustar posición para mantener coherencia */
+.message.self .download-btn {
+    background-color: #4caf50;
+}
+
+/* Animación cuando se hace clic en el botón de descarga */
+.download-btn:active,
+.download-btn.downloading {
+    transform: scale(0.95) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+    animation: none !important;
+}
+
+/* Estilos mejorados para contenedores de documentos */
+.document-container {
+    padding: 15px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    min-width: 250px;
+    max-width: 100%;
+    width: 100%;
+}
+
+.message.self .document-container {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.file-icon {
+    font-size: 24px;
+    color: var(--primary-color);
+    min-width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(108, 92, 231, 0.1);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.message.self .file-icon {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.file-details {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    width: auto;
+    max-width: none;
+    padding-right: 10px;
+}
+
+.file-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+    max-width: none;
+    width: auto;
+    display: inline-block;
+    word-break: break-all;
+    font-size: 13px;
+}
+
+.file-size {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+}
+
+.message.self .file-size {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Botón de descarga de documento */
+.file-download-btn {
+    position: relative;
+    opacity: 1;
+    width: auto;
+    height: auto;
+    padding: 8px 15px;
+    border-radius: 20px;
+    text-align: center;
+    background-color: var(--primary-color);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    margin-top: 0;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+    align-self: flex-start;
+}
+
+.message.self .file-download-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    align-self: flex-end;
+}
+
+.file-download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    text-decoration: none;
+    color: white;
+}
+
+/* Media container específico para documentos */
+.media-container .document-container {
+    width: 100%;
+    max-width: 300px;
+}
+
+/* Estilos para contenedor de audio */
+.audio-container {
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    position: relative;
+}
+
+.message.self .audio-container {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.audio-container audio {
+    width: 100%;
+    border-radius: 20px;
+    outline: none;
+}
+
+/* Ajustes para video */
+.video-container {
+    position: relative;
+}
+
+.video-wrapper {
+    margin-bottom: 0;
+}
+
+/* Ajustes para mensajes con archivos */
+.message .media-container {
+    max-width: 300px;
+    margin-top: 8px;
+    overflow: hidden;
+    border-radius: 8px;
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+/* Ajustes para pantallas pequeñas */
+@media (max-width: 576px) {
+    .document-container {
+        min-width: 200px;
+        max-width: 100%;
+    }
+    
+    .file-name {
+        max-width: 100%;
+    }
+    
+    .message .media-container {
+        max-width: 100%;
+    }
+}
+
+/* Estilos específicos para mensajes con archivos */
+.message.with-file .content {
+    width: 100%;
+}
+
+.message.with-file .media-container {
+    max-width: 100%;
+    width: 100%;
+}
+
+.message.with-file.self .media-container {
+    width: 100%;
+}
+
+/* Contenedor para documento con botón externo */
+.document-wrapper {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+}
+
+/* Botón externo de descarga */
+.external-download-btn {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    width: 35px;
+    height: 35px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    opacity: 0;
+    transition: var(--transition);
+    z-index: 10;
+}
+
+.document-wrapper:hover .external-download-btn,
+.message:hover .external-download-btn {
+    opacity: 1;
+}
+
+.external-download-btn:hover {
+    background-color: var(--primary-color);
+    transform: scale(1.1);
+    color: white;
+}
+
+/* Para mensajes propios, mantener el botón en la misma posición (esquina superior izquierda) */
+.message.self .external-download-btn {
+    left: 8px;
+    right: auto;
+}
+
+/* Ajustes para pantallas pequeñas */
+@media (max-width: 576px) {
+    .external-download-btn {
+        left: -30px;
+    }
+}
+
+/* Ajustes responsive para la página de inicio */
+@media (max-width: 768px) {
+    .join-container {
+        margin: 30px auto;
+        width: 90%;
+    }
+}
+
+@media (max-height: 700px) {
+    .join-container {
+        margin: 20px auto;
+    }
+    
+    .join-main {
+        padding: 25px 20px;
+    }
+}
+
+/* Centrar el contenido verticalmente en pantallas grandes */
+@media (min-height: 900px) {
+    body:has(.join-container) {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+    }
+    
+    .join-container {
+        margin: 0 auto;
+    }
+}
+
+/* Contador de caracteres */
+.char-counter {
+    position: absolute;
+    bottom: -22px;
+    right: 10px;
+    font-size: 12px;
+    color: #888;
+    transition: var(--transition);
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.char-counter span {
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.char-counter span.warning {
+    color: orange;
+}
+
+.char-counter span.limit-exceeded {
+    color: var(--danger-color);
+}
+
+.input-wrapper input[type='text'].limit-exceeded {
+    box-shadow: 0 0 0 2px var(--danger-color);
+}
+
+/* Estilos para la barra de progreso principal */
+.upload-progress-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    z-index: 1000;
+    text-align: center;
+    color: white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.upload-progress {
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.upload-progress-bar {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Estilos para la indicación de carga dentro del mensaje */
+.uploading-message {
+    opacity: 0.8;
+}
+
+.file-upload-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.05);
+    text-align: center;
+    width: 100%;
+}
+
+.file-upload-info i {
+    font-size: 24px;
+    margin-bottom: 10px;
+    color: var(--primary-color);
+}
+
+.file-upload-info p {
+    margin: 5px 0;
+    font-size: 14px;
+    width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-all;
+    white-space: normal;
+    max-width: 100%;
+    text-align: center;
+}
+
+.upload-progress-small {
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.upload-progress-bar-small {
+    height: 100%;
+    width: 0;
+    background: var(--primary-color);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.uploading-message.error .file-upload-info {
+    background: rgba(255, 0, 0, 0.1);
+}
+
+.error-message {
+    color: #d9534f;
+    margin-top: 10px;
+    font-weight: 500;
+}
+
+/* Indicador de archivos grandes alojados en servidor */
+.large-file-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5px;
+    font-size: 0.8rem;
+    background-color: #4a8bfa;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.large-file-badge i {
+    font-size: 0.6rem;
+}
+
+/* Estilos para el indicador de descarga */
+.download-indicator {
+    margin-top: 8px;
+    width: 100%;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.download-progress {
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 6px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.download-progress-bar {
+    height: 100%;
+    background: linear-gradient(to right, #4a8bfa, #6c63ff);
+    width: 0;
+    border-radius: 4px;
+    transition: width 0.3s ease-in-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.download-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+        rgba(255,255,255,0) 0%, 
+        rgba(255,255,255,0.3) 50%, 
+        rgba(255,255,255,0) 100%);
+    animation: progress-shine 1.5s infinite;
+}
+
+@keyframes progress-shine {
+    to {
+        left: 100%;
+    }
+}
+
+.download-status {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.85);
+    text-align: center;
+    font-weight: 500;
+}
+
+/* Estilo para el botón de descarga activo */
+.download-btn.downloading,
+.external-download-btn.downloading {
+    background-color: #3a6bc9;
+    animation: pulse 1.5s infinite;
+    pointer-events: none; /* Evitar clics múltiples */
+}
+
+/* Ajustes para archivos grandes */
+.file-container {
+    position: relative;
+}
+
+.external-download-btn {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    background-color: #4a8bfa;
+    color: white;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.external-download-btn:hover {
+    background-color: #3a6bc9;
+    transform: scale(1.1);
+}
+
+.document-container {
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 10px;
+    display: flex;
+    position: relative;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+    flex-grow: 1;
+}
+
+.file-icon {
+    font-size: 2rem;
+    margin-right: 10px;
+    color: #4a8bfa;
+}
+
+.file-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.file-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+    max-width: none;
+    width: auto;
+    display: inline-block;
+    word-break: break-all;
+    font-size: 13px;
+}
+
+.file-size {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Estilo para el botón durante el cooldown */
+.chat-form-container button.cooldown {
+    background-color: #888;
+    cursor: not-allowed;
+    opacity: 0.7;
+    transition: all 0.3s;
+}
+
+.chat-form-container button.cooldown:hover {
+    background-color: #888;
+    transform: none;
+}
+
+.char-counter {
+    position: absolute;
+    bottom: -20px;
+    right: 10px;
+    font-size: 0.8rem;
+    color: var(--light-color);
+    opacity: 0.7;
+}
+
+/* Estilos para la cabecera del mensaje con el botón de descarga */
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 5px;
+    padding: 0 2px;
+}
+
+.message .meta {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.message.self .meta {
+    color: #fff;
+    order: 2;
+}
+
+.message .meta span {
+    color: #999;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.message.self .meta span {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Contenedor para el botón de descarga en la cabecera */
+.download-btn-container {
+    display: flex;
+    align-items: center;
+    margin: 0;
+}
+
+.message .download-btn-container {
+    margin-left: auto;
+}
+
+.message.self .download-btn-container {
+    margin-right: auto;
+    margin-left: 0;
+    order: 1;
+}
+
+/* Estilos para el botón de descarga */
+.download-btn {
+    width: 22px;
+    height: 22px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    opacity: 0.85;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transform: scale(1);
+    position: relative;
+    overflow: hidden;
+}
+
+.message.self .download-btn {
+    background-color: #4caf50;
+}
+
+.download-btn i {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+
+.download-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0),
+        rgba(255, 255, 255, 0.3),
+        rgba(255, 255, 255, 0)
+    );
+    transition: left 0.7s ease;
+}
+
+.download-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.download-btn:hover::before {
+    left: 100%;
+}
+
+.download-btn:hover i {
+    transform: translateY(-2px);
+}
+
+/* Eliminar los estilos antiguos para botones de descarga dentro de contenedores */
+.file-container .download-btn,
+.image-container .download-btn,
+.video-container .download-btn,
+.audio-container .download-btn {
+    position: static;
+    bottom: auto;
+    right: auto;
+}
+
+/* Ajustes específicos para el contenido */
+.message .content {
+    width: 100%;
+    margin-top: 0;
+}
+
+/* Estilos responsivos para adaptarse a pantallas pequeñas */
+@media (max-width: 576px) {
+    .message-header {
+        flex-wrap: wrap;
+    }
+    
+    .download-btn {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .download-btn i {
+        font-size: 11px;
+    }
+}
+
+/* Estilo para botón de descarga en estado activo/click */
+.download-btn:active {
+    transform: scale(0.9);
+    opacity: 1;
+}
+
+.download-btn.downloading {
+    animation: none;
+    transform: scale(0.9);
+    opacity: 1;
+}
+
+/* Estilos para mensajes del sistema */
+.system-message {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+    margin: 15px 0;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+}
+
+.system-message.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.system-alert {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-left: 4px solid var(--primary-color);
+    padding: 10px 15px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    max-width: 80%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.system-alert i {
+    color: var(--primary-color);
+    font-size: 20px;
+    margin-right: 10px;
+}
+
+.system-alert p {
+    margin: 0;
+    color: var(--dark-color);
+    font-size: 14px;
+} 
+
+/* Estilos para videos pequeños */
+.video-container video.small-video-loaded {
+    background-color: #000; /* Asegurar que el fondo sea negro mientras se carga */
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Mejorar UI para controles de video */
+.media-content[controls] {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Estilos especiales para videos optimizados */
+.video-wrapper {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.05);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.video-wrapper:hover {
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Asegurar que video-container y media-container mantengan la relación de aspecto */
+.video-container {
+    position: relative;
+    max-width: 100%;
+    margin: 10px 0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Estilos para el manejo de videos problemáticos */
+.special-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 5;
+    border-radius: 8px;
+}
+
+.special-loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 15px;
+}
+
+.special-loading-text {
+    color: #fff;
+    font-size: 14px;
+    text-align: center;
+    max-width: 80%;
+    padding: 0 10px;
+}
+
+.video-error {
+    width: 100%;
+    height: 100%;
+    min-height: 150px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    text-align: center;
+}
+
+.video-error i {
+    font-size: 30px;
+    margin-bottom: 10px;
+    color: #e74c3c;
+}
+
+.video-error p {
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+
+.retry-video-btn, .download-video-btn {
+    padding: 8px 16px;
+    margin: 5px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.retry-video-btn {
+    background-color: #3498db;
+    color: white;
+}
+
+.download-video-btn {
+    background-color: #2ecc71;
+    color: white;
+    text-decoration: none;
+}
+
+.retry-video-btn:hover, .download-video-btn:hover {
+    opacity: 0.85;
+    transform: translateY(-2px);
+}
+
+.retry-video-btn i, .download-video-btn i {
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+} 

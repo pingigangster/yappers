@@ -1,0 +1,51 @@
+# Archivo generado por el sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración local y secretos
+# ¡¡¡MUY IMPORTANTE!!!
+.env
+.env.local
+.env.*
+!.env.example # Puedes descomentar esto si tienes un .env.example que SÍ quieres subir
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Archivos temporales y de caché
+.tmp
+.npm
+.yarn-cache
+.yarn-integrity
+*.tsbuildinfo
+
+# Directorio de dependencias (¡NUNCA subir!)
+node_modules/
+.node_modules
+# Archivos de build (si aplica)
+dist/
+build/
+out/
+
+# Archivos de IDEs y editores
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Archivos de test coverage (si usas herramientas de testing)
+coverage/
+.nyc_output/
+
+# Otros archivos específicos del proyecto que no quieras versionar
+# Por ejemplo:
+# uploads/ # Si guardas archivos subidos localmente fuera de la DB

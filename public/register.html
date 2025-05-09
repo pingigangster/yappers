@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrarse - 100% REAL XAT</title>
+    <link rel="icon" type="image/png" href="favicon-32x32.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        html, body {
+            height: 100vh;
+            min-height: 100vh;
+            overflow: hidden !important;
+        }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            height: 100vh;
+            width: 100vw;
+            background: linear-gradient(135deg, #232526 0%, #414345 100%);
+        }
+        .auth-container {
+            min-height: 0;
+            max-height: 95vh;
+            height: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            max-width: 360px;
+            width: 95vw;
+            margin: 0 auto;
+            padding: 24px 20px;
+            background-color: var(--dark-color);
+            border-radius: 18px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+            transition: box-shadow 0.3s, background 0.3s;
+            color: #fff;
+            overflow: hidden;
+        }
+        .auth-container h1 {
+            margin-bottom: 16px;
+            color: var(--light-color);
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .auth-container .logo {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+            color: var(--primary-color);
+            text-shadow: 0 2px 8px rgba(108, 92, 231, 0.15);
+        }
+        .welcome-text {
+            color: #e0e0e0;
+            font-size: 1rem;
+            margin-bottom: 16px;
+            text-align: center;
+            line-height: 1.4;
+        }
+        .auth-form {
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 0;
+        }
+        .auth-form input, .auth-form button {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .auth-form input {
+            min-width: 0;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: none;
+            background: #f9f9f9;
+            color: #222;
+            box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+            transition: box-shadow 0.2s, background 0.2s;
+            font-size: 1rem;
+        }
+        .auth-form input:focus {
+            background: #fff;
+            color: #222;
+            box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.15);
+        }
+        .auth-form input::placeholder {
+            color: #aaa;
+            opacity: 1;
+        }
+        .auth-form button, .google-login-button {
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            width: 100%;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        .auth-form button {
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            color: #fff;
+            border: none;
+            box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+            transition: background 0.2s, transform 0.15s;
+        }
+        .auth-form button:hover {
+            background: linear-gradient(90deg, #5853c4, #00a38c);
+            transform: translateY(-1px) scale(1.01);
+        }
+        .switch-form {
+            margin-top: 18px;
+            font-size: 0.95rem;
+            color: rgba(255,255,255,0.88);
+            text-align: center;
+        }
+        .switch-form a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.2s;
+        }
+        .switch-form a:hover {
+            color: var(--secondary-color);
+            text-decoration: underline;
+        }
+        .error-message {
+            color: #ff7675;
+            background: transparent;
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-top: -8px;
+            margin-bottom: 8px;
+            text-align: left;
+            padding-left: 4px;
+            display: none;
+        }
+        .alert {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            display: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            text-align: center;
+        }
+        .alert-danger {
+            color: #fff;
+            background: #e74c3c;
+            border: none;
+        }
+        .alert-success {
+            color: #fff;
+            background: #2ecc71;
+            border: none;
+        }
+        .separator {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 18px 0 14px 0;
+            color: rgba(255,255,255,0.7);
+            font-size: 0.95rem;
+        }
+        .separator::before,
+        .separator::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid rgba(255,255,255,0.16);
+        }
+        .separator::before {
+            margin-right: 10px;
+        }
+        .separator::after {
+            margin-left: 10px;
+        }
+        .google-login-button {
+            background: #fff;
+            color: #444;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 14px auto 0;
+            transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+            box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+            height: auto;
+            text-align: center;
+        }
+        .google-login-button:hover {
+            background: #f5f5f5;
+            color: var(--primary-color);
+            box-shadow: 0 2px 8px rgba(108, 92, 231, 0.10);
+        }
+        .google-login-button img {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @media (max-width: 600px) {
+            .auth-container {
+                max-width: 100vw;
+                width: 100vw;
+                min-height: 100vh;
+                height: 100vh;
+                border-radius: 0;
+                padding: 16px 20px;
+            }
+            .auth-form {
+                max-width: 100%;
+                gap: 12px;
+            }
+            .auth-container h1 {
+                font-size: 1.3rem;
+            }
+            .auth-container .logo {
+                font-size: 2rem;
+            }
+        }
+        @media (max-height: 600px) {
+            .auth-container {
+                min-height: 100vh;
+                height: 100vh;
+                padding: 10px 2vw;
+            }
+            .auth-form input, .auth-form button {
+                padding: 12px 10px;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <i class="fas fa-user-plus logo"></i>
+        <h1>Crear Cuenta</h1>
+        
+        <div class="welcome-text">
+            Crea una nueva cuenta para guardar tu historial y personalizar tu experiencia.
+        </div>
+        
+        <div id="alert" class="alert"></div>
+        
+        <form class="auth-form" id="register-form">
+            <input 
+                type="text" 
+                id="username" 
+                name="username" 
+                placeholder="Nombre de usuario" 
+                required 
+                minlength="3"
+                maxlength="15"
+                autocomplete="username"
+            >
+            <div class="error-message" id="username-error">
+                El nombre de usuario debe tener entre 3 y 15 caracteres
+            </div>
+            
+            <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                placeholder="Correo electrónico" 
+                required 
+                autocomplete="email"
+            >
+            <div class="error-message" id="email-error">
+                Por favor introduce un correo electrónico válido
+            </div>
+            
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                placeholder="Contraseña" 
+                required 
+                minlength="6"
+                autocomplete="new-password"
+            >
+            <div class="error-message" id="password-error">
+                La contraseña debe tener al menos 6 caracteres
+            </div>
+            
+            <input 
+                type="password" 
+                id="confirm-password" 
+                name="confirm-password" 
+                placeholder="Confirmar contraseña" 
+                required 
+                autocomplete="new-password"
+            >
+            <div class="error-message" id="confirm-password-error">
+                Las contraseñas no coinciden
+            </div>
+            
+            <button type="submit">
+                <i class="fas fa-user-plus"></i> Registrarse
+            </button>
+        </form>
+        
+        <div class="separator">O regístrate con</div>
+        
+        <a href="/api/auth/google" class="google-login-button">
+            <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" alt="Google logo" style="width: 20px; height: 20px; margin-right: 10px;">
+            Continuar con Google
+        </a>
+        
+        <div class="switch-form">
+            ¿Ya tienes una cuenta? <a href="/login">Iniciar sesión</a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const registerForm = document.getElementById('register-form');
+            const usernameInput = document.getElementById('username');
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const confirmPasswordInput = document.getElementById('confirm-password');
+            
+            const usernameError = document.getElementById('username-error');
+            const emailError = document.getElementById('email-error');
+            const passwordError = document.getElementById('password-error');
+            const confirmPasswordError = document.getElementById('confirm-password-error');
+            
+            const alert = document.getElementById('alert');
+            
+            // Mostrar mensaje de alerta
+            const showAlert = (message, type = 'danger') => {
+                alert.textContent = message;
+                alert.className = `alert alert-${type}`;
+                alert.style.display = 'block';
+                
+                // Ocultar después de 5 segundos
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            };
+            
+            // Validar nombre de usuario
+            usernameInput.addEventListener('input', () => {
+                const username = usernameInput.value.trim();
+                
+                if (username.length < 3 || username.length > 15) {
+                    usernameError.style.display = 'block';
+                    usernameInput.setCustomValidity('El nombre debe tener entre 3 y 15 caracteres');
+                } else {
+                    usernameError.style.display = 'none';
+                    usernameInput.setCustomValidity('');
+                }
+            });
+            
+            // Validar email
+            emailInput.addEventListener('input', () => {
+                const email = emailInput.value.trim();
+                const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+                
+                if (!emailRegex.test(email)) {
+                    emailError.style.display = 'block';
+                    emailInput.setCustomValidity('Por favor introduce un correo electrónico válido');
+                } else {
+                    emailError.style.display = 'none';
+                    emailInput.setCustomValidity('');
+                }
+            });
+            
+            // Validar contraseña
+            passwordInput.addEventListener('input', () => {
+                const password = passwordInput.value;
+                
+                if (password.length < 6) {
+                    passwordError.style.display = 'block';
+                    passwordInput.setCustomValidity('La contraseña debe tener al menos 6 caracteres');
+                } else {
+                    passwordError.style.display = 'none';
+                    passwordInput.setCustomValidity('');
+                }
+                
+                // Comprobar también la confirmación de contraseña
+                validatePasswordMatch();
+            });
+            
+            // Validar confirmación de contraseña
+            confirmPasswordInput.addEventListener('input', validatePasswordMatch);
+            
+            function validatePasswordMatch() {
+                const password = passwordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                
+                if (confirmPassword && password !== confirmPassword) {
+                    confirmPasswordError.style.display = 'block';
+                    confirmPasswordInput.setCustomValidity('Las contraseñas no coinciden');
+                } else {
+                    confirmPasswordError.style.display = 'none';
+                    confirmPasswordInput.setCustomValidity('');
+                }
+            }
+            
+            // Manejar el envío del formulario
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const username = usernameInput.value.trim();
+                const email = emailInput.value.trim();
+                const password = passwordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                
+                // Validación final
+                if (password !== confirmPassword) {
+                    showAlert('Las contraseñas no coinciden');
+                    return;
+                }
+                
+                try {
+                    // Enviar solicitud de registro
+                    const response = await fetch('/api/auth/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, email, password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Registro exitoso
+                        showAlert('¡Registro exitoso! Redirigiendo al chat...', 'success');
+                        
+                        // Almacenar usuario en localStorage para uso futuro
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        
+                        // Redirigir a chat después de 2 segundos
+                        setTimeout(() => {
+                            window.location.href = '/chat';
+                        }, 2000);
+                    } else {
+                        // Error en el registro
+                        showAlert(data.message || 'Error en el registro');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showAlert('Error de conexión. Inténtalo de nuevo más tarde.');
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
