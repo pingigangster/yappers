@@ -27,7 +27,7 @@ lerna-debug.log*
 
 # Directorio de dependencias (¡NUNCA subir!)
 node_modules/
-
+.node_modules
 # Archivos de build (si aplica)
 dist/
 build/
