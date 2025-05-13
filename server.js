@@ -300,14 +300,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email es obligatorio' });
         }
         
-        const token = await authController.forgotPassword(email);
+        await authController.forgotPassword(email);
         
-        // Aquí se enviaría un email con el enlace para restablecer contraseña
-        // Por ahora, solo devolvemos el token
+        // Ya no devolvemos el token, solo un mensaje de éxito
         return res.status(200).json({ 
             success: true, 
-            message: 'Se ha enviado un email con instrucciones',
-            token // Solo para desarrollo
+            message: 'Se ha enviado un email con instrucciones para restablecer tu contraseña'
         });
     } catch (error) {
         console.error('Error al solicitar restablecimiento de contraseña:', error);
@@ -1998,4 +1996,29 @@ app.use((req, res, next) => {
         return res.redirect(301, `/chat${queryParams}`);
     }
     next();
+});
+
+// Middleware para los archivos estáticos
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Rutas para páginas estáticas
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/register', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+// Nuevas rutas para recuperación de contraseña
+app.get('/forgot-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'forgot-password.html'));
+});
+
+app.get('/reset-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
 });

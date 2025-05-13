@@ -8,6 +8,7 @@ const bcrypt = require('bcrypt');
 const moment = require('moment');
 const stream = require('stream');
 const { promisify } = require('util');
+const { sendWelcomeEmail, sendPasswordResetEmail } = require('../utils/mailer');
 
 // Configuración de JWT
 const JWT_SECRET = 'chat_app_secret_key_2023'; // Idealmente esto debería estar en variables de entorno
@@ -77,6 +78,15 @@ const authController = {
                 JWT_SECRET,
                 { expiresIn: JWT_EXPIRES_IN }
             );
+            
+            // Enviar correo de bienvenida
+            try {
+                await sendWelcomeEmail(user);
+                console.log(`Correo de bienvenida enviado a ${user.email}`);
+            } catch (emailError) {
+                console.error(`Error al enviar correo de bienvenida: ${emailError}`);
+                // No interrumpimos el flujo si falla el envío del correo
+            }
             
             return {
                 user: {
@@ -157,6 +167,19 @@ const authController = {
             user.passwordResetToken = resetToken;
             user.passwordResetExpires = Date.now() + 3600000; // 1 hora
             await user.save();
+            
+            // Enviar correo con enlace de recuperación
+            try {
+                await sendPasswordResetEmail(user, resetToken);
+                console.log(`Correo de recuperación enviado a ${user.email}`);
+            } catch (emailError) {
+                console.error(`Error al enviar correo de recuperación: ${emailError}`);
+                // Revertir los cambios si falla el envío del correo
+                user.passwordResetToken = undefined;
+                user.passwordResetExpires = undefined;
+                await user.save();
+                throw new Error('Error al enviar el correo de recuperación');
+            }
             
             return resetToken;
         } catch (error) {
