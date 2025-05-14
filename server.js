@@ -1985,6 +1985,28 @@ app.delete('/api/admin/users', (req, res) => {
     userController.deleteAllUsers(req, res);
 }); 
 
+// API para que el administrador cambie la contraseña de un usuario
+app.post('/api/admin/user/change-password', verifyAdminToken, async (req, res) => {
+    const { userId, newPassword } = req.body;
+
+    if (!userId || !newPassword) {
+        return res.status(400).json({ success: false, message: 'Se requieren el ID del usuario y la nueva contraseña.' });
+    }
+
+    if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    try {
+        const result = await userController.adminChangeUserPassword(userId, newPassword);
+        // Considerar notificar al usuario por correo que su contraseña fue cambiada por un admin.
+        return res.status(200).json(result);
+    } catch (error) {
+        console.error('Error en ruta /api/admin/user/change-password:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Error al cambiar la contraseña del usuario.' });
+    }
+});
+
 // Ruta comodín final - IMPORTANTE: debe ir después de todas las rutas específicas
 // Esta ruta captura cualquier acceso que aún contenga 'chat.html' y lo redirige a /chat
 app.use((req, res, next) => {

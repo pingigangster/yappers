@@ -548,6 +548,29 @@ const userController = {
         }
     },
     // <<< FIN NUEVA FUNCIÓN >>>
+
+    // Cambiar contraseña de un usuario (por administrador)
+    async adminChangeUserPassword(userId, newPassword) {
+        try {
+            const user = await User.findById(userId);
+            if (!user) {
+                throw new Error('Usuario no encontrado');
+            }
+
+            // La nueva contraseña será hasheada automáticamente por el pre-save hook del modelo User
+            user.password = newPassword;
+            // Invalidar cualquier token de reseteo de contraseña existente
+            user.passwordResetToken = undefined;
+            user.passwordResetExpires = undefined;
+
+            await user.save();
+            console.log(`Contraseña cambiada por admin para el usuario: ${user.username} (ID: ${user._id})`);
+            return { success: true, message: 'Contraseña actualizada correctamente' };
+        } catch (error) {
+            console.error(`Error al cambiar contraseña por admin para el usuario ${userId}:`, error);
+            throw error;
+        }
+    },
 };
 
 // Controladores para mensajes

@@ -504,32 +504,27 @@
         <!-- Users Card -->
         <div class="card">
             <div class="card-header">
-                <h2>Gestión de Usuarios</h2>
-                            <button id="refresh-users" class="refresh-btn" title="Actualizar usuarios">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
+                <h2><i class="fas fa-users"></i> Lista de Usuarios</h2>
+                <button id="refresh-users" class="btn btn-primary btn-sm"><i class="fas fa-sync-alt"></i> Actualizar</button>
+            </div>
             <div class="card-body">
                 <div class="table-container">
-                            <table id="users-table">
-                                <thead>
-                                    <tr>
-                                <th>Usuario</th>
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
                                 <th>Email</th>
-                                <th>Fecha de Registro</th>
-                                <th>Estado</th>
-                                <th>Acción</th>
-                                    </tr>
-                                </thead>
-                        <tbody id="users-tbody"></tbody>
-                            </table>
-                    <div id="empty-users" class="empty-message" style="display: none;">No hay usuarios registrados</div>
-                </div>
-                
-                <div class="actions">
-                    <button id="delete-all-users" class="btn btn-danger">
-                        <i class="fas fa-trash-alt"></i> Eliminar Todos los Usuarios
-                    </button>
+                                <th>Rol</th>
+                                <th>Conectado</th>
+                                <th>Última Actividad</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- User rows will be inserted here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -567,11 +562,36 @@
     <!-- Confirmation Modal -->
     <div id="confirmation-modal" class="modal">
         <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('confirmation-modal')">&times;</span>
             <h3 id="modal-title">Confirmar Acción</h3>
             <p id="modal-message">¿Estás seguro de realizar esta acción?</p>
             <div class="modal-footer">
-                <button id="modal-cancel" class="btn btn-primary">Cancelar</button>
+                <button id="modal-cancel" class="btn btn-secondary">Cancelar</button>
                 <button id="modal-confirm" class="btn btn-danger">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="change-password-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('change-password-modal')">&times;</span>
+            <h3>Cambiar Contraseña</h3>
+            <input type="hidden" id="change-password-user-id">
+            <p>Usuario: <strong id="change-password-username"></strong></p>
+            <div class="form-group">
+                <label for="new-password">Nueva Contraseña:</label>
+                <input type="password" id="new-password" required minlength="6">
+                <small class="form-text text-muted">Mínimo 6 caracteres.</small>
+            </div>
+            <div class="form-group">
+                <label for="confirm-new-password">Confirmar Nueva Contraseña:</label>
+                <input type="password" id="confirm-new-password" required minlength="6">
+            </div>
+            <div id="change-password-error" class="alert alert-danger" style="display:none; margin-bottom: 15px;"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('change-password-modal')">Cancelar</button>
+                <button id="confirm-change-password-btn" class="btn btn-primary">Guardar Contraseña</button>
             </div>
         </div>
     </div>
@@ -581,72 +601,79 @@
         let adminPassword = '';
         const API_BASE_URL = window.location.origin;
         
-        // Elementos DOM
+        // Elementos DOM (Panel de Login y Admin Principal)
         const loginPanel = document.getElementById('login-panel');
         const adminPanel = document.getElementById('admin-panel');
         const loginForm = document.getElementById('login-form');
-        const usersTable = document.getElementById('users-table');
-        const usersTbody = document.getElementById('users-tbody');
-        const emptyUsers = document.getElementById('empty-users');
+        const logoutBtn = document.getElementById('logout-btn');
+        const alertContainer = document.getElementById('alert-container');
+
+        // Elementos DOM (Estadísticas)
         const refreshStatsBtn = document.getElementById('refresh-stats');
-        const refreshUsersBtn = document.getElementById('refresh-users');
         const totalUsersElement = document.getElementById('total-users');
         const totalMessagesElement = document.getElementById('total-messages');
         const connectedUsersElement = document.getElementById('connected-users');
-        const deleteAllUsersBtn = document.getElementById('delete-all-users');
+
+        // Elementos DOM (Usuarios)
+        const usersTable = document.getElementById('users-table');
+        //const usersTbody = document.getElementById('users-tbody'); // Asegúrate que este ID exista o usa getElementsByTagName
+        const refreshUsersBtn = document.getElementById('refresh-users');
+        // const emptyUsers = document.getElementById('empty-users'); // Asegúrate que este ID exista si se usa
+
+        // Elementos DOM (Mensajes y Sistema)
         const deleteAllMessagesBtn = document.getElementById('delete-all-messages');
         const resetEverythingBtn = document.getElementById('reset-everything');
+        
+        // Elementos DOM (Modal de Confirmación General)
         const confirmationModal = document.getElementById('confirmation-modal');
         const modalTitle = document.getElementById('modal-title');
         const modalMessage = document.getElementById('modal-message');
-        const modalCancelBtn = document.getElementById('modal-cancel');
         const modalConfirmBtn = document.getElementById('modal-confirm');
-        const alertContainer = document.getElementById('alert-container');
-        const logoutBtn = document.getElementById('logout-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel');
+        let currentConfirmAction = null; // Callback para la acción del modal de confirmación
+
+        // Elementos DOM (Modal de Cambio de Contraseña)
+        const changePasswordModal = document.getElementById('change-password-modal');
+        const changePasswordUserIdInput = document.getElementById('change-password-user-id');
+        const changePasswordUsernameSpan = document.getElementById('change-password-username');
+        const newPasswordInput = document.getElementById('new-password');
+        const confirmNewPasswordInput = document.getElementById('confirm-new-password');
+        const changePasswordErrorDiv = document.getElementById('change-password-error');
+        const confirmChangePasswordBtn = document.getElementById('confirm-change-password-btn');
         
         // Estado de la aplicación
-        let loadingState = false;
+        // let loadingState = false; // No parece usarse globalmente
         
         // Verificar si hay una sesión guardada al cargar la página
         document.addEventListener('DOMContentLoaded', () => {
             const savedSession = localStorage.getItem('adminSession');
             if (savedSession) {
                 try {
-                    // Recuperar la contraseña guardada
                     adminPassword = savedSession;
-                    
-                    // Ocultar login y mostrar panel
                     loginPanel.style.display = 'none';
                     adminPanel.style.display = 'block';
-                    
-                    // Cargar datos iniciales
-                    loadStats();
-                    loadUsers();
+                    loadInitialData();
                 } catch (error) {
                     console.error('Error al recuperar sesión:', error);
-                    // Si hay algún error, limpiar la sesión
                     logout();
                 }
             }
         });
-        
-        // Función para cerrar sesión
-        function logout() {
-            // Limpiar localStorage
-            localStorage.removeItem('adminSession');
-            
-            // Limpiar variables
-            adminPassword = '';
-            
-            // Mostrar login y ocultar panel
-            loginPanel.style.display = 'block';
-            adminPanel.style.display = 'none';
-            
-            // Limpiar datos sensibles
-            document.getElementById('password').value = '';
+
+        function loadInitialData(){
+            loadStats();
+            loadUsers();
         }
         
-        // Evento para botón de cerrar sesión
+        function logout() {
+            localStorage.removeItem('adminSession');
+            adminPassword = '';
+            loginPanel.style.display = 'block';
+            adminPanel.style.display = 'none';
+            const passwordField = document.getElementById('password');
+            if(passwordField) passwordField.value = '';
+        }
+        
         logoutBtn.addEventListener('click', () => {
             showModal(
                 'Cerrar Sesión',
@@ -655,120 +682,86 @@
             );
         });
         
-        // Formatear fecha
-        function formatDate(date) {
-            if (!date) return 'N/A';
-            const d = new Date(date);
-            return d.toLocaleString();
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
         
-        // Mostrar alertas
-        function showAlert(message, type = 'success') {
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
+        function showAlert(message, type = 'success', container = alertContainer) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
             
-            const content = document.createElement('span');
-            content.textContent = message;
+            const contentSpan = document.createElement('span');
+            contentSpan.textContent = message;
             
             const closeBtn = document.createElement('span');
             closeBtn.className = 'close';
             closeBtn.innerHTML = '&times;';
-            closeBtn.onclick = function() {
-                alert.remove();
-            };
+            closeBtn.onclick = () => alertDiv.remove();
             
-            alert.appendChild(content);
-            alert.appendChild(closeBtn);
-            alertContainer.appendChild(alert);
+            alertDiv.appendChild(contentSpan);
+            alertDiv.appendChild(closeBtn);
+            container.appendChild(alertDiv);
             
-            // Auto-eliminar después de 5 segundos
             setTimeout(() => {
-                if (alertContainer.contains(alert)) {
-                    alert.style.opacity = '0';
-                    setTimeout(() => alert.remove(), 300);
+                if (container.contains(alertDiv)) {
+                    alertDiv.style.opacity = '0';
+                    setTimeout(() => alertDiv.remove(), 300);
                 }
             }, 5000);
         }
         
-        // Control de estados de carga
         function setLoading(element, isLoading) {
-            // Si ya hay un elemento con loading overlay, eliminarlo primero
             const existingOverlay = element.querySelector('.loading-overlay');
             if (existingOverlay) {
                 existingOverlay.remove();
             }
-            
             if (isLoading) {
                 const overlay = document.createElement('div');
                 overlay.className = 'loading-overlay';
-                
                 const spinner = document.createElement('div');
                 spinner.className = 'spinner';
-                
                 overlay.appendChild(spinner);
+                element.style.position = 'relative'; // Necesario para el posicionamiento absoluto del overlay
                 element.appendChild(overlay);
             }
         }
         
-        // Realizar peticiones a la API con manejo de errores
         async function fetchAPI(endpoint, options = {}) {
+            if (!options.headers) {
+                options.headers = { 'Content-Type': 'application/json' };
+            }
             try {
-                // Asegurarse de que hay headers
-                if (!options.headers) {
-                    options.headers = {
-                        'Content-Type': 'application/json'
-                    };
-                }
-                
-                console.log(`Realizando petición a: ${API_BASE_URL}${endpoint}`);
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-                
-                // Si la respuesta no es OK, lanzar error
                 if (!response.ok) {
-                    const text = await response.text();
-                    throw new Error(`Error ${response.status}: ${text || response.statusText}`);
+                    const errorData = await response.json().catch(() => ({ message: response.statusText }));
+                    throw new Error(errorData.message || `Error ${response.status}`);
                 }
-                
-                // Parsear la respuesta como JSON
-                const data = await response.json();
-                return data;
+                return await response.json();
             } catch (error) {
-                console.error(`Error en petición a ${endpoint}:`, error);
+                console.error(`Error en petición a ${API_BASE_URL}${endpoint}:`, error);
                 throw error;
             }
         }
         
-        // Iniciar sesión
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const passwordInput = document.getElementById('password');
             const password = passwordInput.value;
-            
             if (!password) {
                 showAlert('Por favor, introduce la contraseña', 'danger');
                 return;
             }
-            
             try {
                 setLoading(loginForm, true);
-                
-                // Verificar localmente que la contraseña sea correcta
-                if (password === 'patatata123') {
-                    // Guardar contraseña para futuras peticiones
+                // Simulación de login, ya que la API de login real no está siendo usada para admin
+                if (password === 'patatata123') { // Usar la contraseña de admin definida
                     adminPassword = password;
-                    
-                    // Guardar sesión en localStorage
                     localStorage.setItem('adminSession', adminPassword);
-                    
-                    // Ocultar login y mostrar panel
                     loginPanel.style.display = 'none';
                     adminPanel.style.display = 'block';
-                    
-                    // Cargar datos iniciales
-                    loadStats();
-                    loadUsers();
-                    
+                    loadInitialData();
                     showAlert('Has iniciado sesión correctamente', 'success');
                 } else {
                     showAlert('Contraseña incorrecta', 'danger');
@@ -780,329 +773,264 @@
             }
         });
         
-        // Cargar estadísticas
         async function loadStats() {
+            const statsCardBody = document.querySelector('.stats-grid').closest('.card-body');
             try {
-                setLoading(document.querySelector('.stats-grid'), true);
+                setLoading(statsCardBody, true);
                 refreshStatsBtn.classList.add('loading');
-                
-                // Petición para estadísticas generales
                 const statsData = await fetchAPI('/api/admin/stats', {
-                    method: 'POST',
-                    body: JSON.stringify({ password: adminPassword })
+                    method: 'POST', body: JSON.stringify({ password: adminPassword })
                 });
-                
-                // Petición para obtener usuarios conectados
-                const usersData = await fetchAPI('/api/admin/users', {
-                    method: 'POST',
-                    body: JSON.stringify({ password: adminPassword })
+                const usersData = await fetchAPI('/api/admin/users', { // Necesitamos esto para connected users
+                    method: 'POST', body: JSON.stringify({ password: adminPassword })
                 });
-                
-                if (statsData.success && usersData.success) {
-                    const connectedCount = usersData.users.filter(user => user.socketId && user.socketId !== 'undefined' && user.socketId !== '').length;
-                    
-                    totalUsersElement.textContent = statsData.stats.userCount || usersData.users.length;
+
+                if (statsData.success && statsData.stats) {
+                    totalUsersElement.textContent = statsData.stats.userCount || 0;
                     totalMessagesElement.textContent = statsData.stats.messageCount || 0;
+                } else {
+                     totalUsersElement.textContent = 'Error';
+                     totalMessagesElement.textContent = 'Error';
+                }
+                if (usersData.success && usersData.users) {
+                    const connectedCount = usersData.users.filter(user => user.isActive && user.socketId).length;
                     connectedUsersElement.textContent = connectedCount;
                 } else {
-                    showAlert('Error al cargar estadísticas', 'danger');
+                    connectedUsersElement.textContent = 'Error';
                 }
+
             } catch (error) {
                 showAlert(`Error al cargar estadísticas: ${error.message}`, 'danger');
+                totalUsersElement.textContent = 'N/A';
+                totalMessagesElement.textContent = 'N/A';
+                connectedUsersElement.textContent = 'N/A';
             } finally {
-                setLoading(document.querySelector('.stats-grid'), false);
+                setLoading(statsCardBody, false);
                 refreshStatsBtn.classList.remove('loading');
             }
         }
         
-        // Cargar usuarios
         async function loadUsers() {
+            const usersTableBody = usersTable.getElementsByTagName('tbody')[0];
+            const usersCardBody = usersTable.closest('.card-body');
+            usersTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Cargando usuarios...</td></tr>`;
             try {
-                setLoading(document.querySelector('.table-container'), true);
+                setLoading(usersCardBody, true);
                 refreshUsersBtn.classList.add('loading');
-                
-                const data = await fetchAPI('/api/admin/users', {
-                    method: 'POST',
-                    body: JSON.stringify({ password: adminPassword })
+                const response = await fetchAPI('/api/admin/users', {
+                    method: 'POST', body: JSON.stringify({ password: adminPassword })
                 });
-                
-                if (data.success) {
-                    // Limpiar tabla
-                    usersTbody.innerHTML = '';
-                    
-                    if (data.users.length === 0) {
-                        // Mostrar mensaje de vacío
-                        emptyUsers.style.display = 'block';
-                        usersTable.style.display = 'none';
+
+                usersTableBody.innerHTML = ''; // Limpiar antes de añadir filas
+                if (response.success && response.users) {
+                    if (response.users.length === 0) {
+                        usersTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">No hay usuarios registrados.</td></tr>`;
                     } else {
-                        // Mostrar tabla y ocultar mensaje
-                        emptyUsers.style.display = 'none';
-                        usersTable.style.display = 'table';
-                        
-                        // Agregar filas
-                        data.users.forEach(user => {
-                            const tr = document.createElement('tr');
-                            
-                            // Determinar estado - Corrección para detectar conectados correctamente
-                            const isConnected = user.socketId && user.socketId !== 'undefined' && user.socketId !== '';
-                            const statusClass = isConnected ? 'status-connected' : 'status-disconnected';
-                            const statusText = isConnected ? 'Conectado' : 'Desconectado';
-                            
-                            tr.innerHTML = `
-                                <td>${user.username || 'Sin nombre'}</td>
+                        response.users.forEach(user => {
+                            const row = usersTableBody.insertRow();
+                            row.innerHTML = `
+                                <td>${user._id}</td>
+                                <td>${user.username || 'N/A'}</td>
                                 <td>${user.email || 'N/A'}</td>
-                                <td>${formatDate(user.createdAt)}</td>
-                                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                                <td>
-                                    <button class="icon-btn delete-btn" data-id="${user._id}" title="Eliminar usuario">
-                                        <i class="fas fa-trash"></i>
+                                <td><span class="badge badge-${user.role === 'admin' ? 'danger' : 'primary'}">${user.role || 'user'}</span></td>
+                                <td><span class="status-dot ${user.isActive ? 'active' : 'inactive'}" title="${user.isActive ? 'Conectado' : 'Desconectado'}"></span> ${user.socketId ? 'Sí' : 'No'}</td>
+                                <td>${formatDate(user.lastActive)}</td>
+                                <td class="actions">
+                                    <button class="icon-btn change-password-btn" title="Cambiar Contraseña" data-user-id="${user._id}" data-username="${user.username}">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                    <button class="icon-btn delete-btn" title="Eliminar Usuario" data-user-id="${user._id}" data-username="${user.username}">
+                                        <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </td>
                             `;
-                            
-                            usersTbody.appendChild(tr);
-                        });
-                        
-                        // Agregar eventos a botones de eliminar
-                        document.querySelectorAll('.delete-btn').forEach(btn => {
-                            btn.addEventListener('click', () => {
-                                const userId = btn.getAttribute('data-id');
-                                showDeleteUserConfirmation(userId);
-                            });
                         });
                     }
                 } else {
-                    showAlert('Error al cargar usuarios', 'danger');
+                    usersTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Error al cargar usuarios: ${response.message || 'Desconocido'}</td></tr>`;
                 }
+                 // Add event listeners after rows are created
+                attachUserActionListeners();
             } catch (error) {
                 showAlert(`Error al cargar usuarios: ${error.message}`, 'danger');
+                usersTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Error crítico al cargar usuarios.</td></tr>`;
             } finally {
-                setLoading(document.querySelector('.table-container'), false);
+                setLoading(usersCardBody, false);
                 refreshUsersBtn.classList.remove('loading');
             }
         }
-        
-        // Mostrar modal de confirmación
-        function showModal(title, message, confirmCallback) {
-            modalTitle.textContent = title;
-            modalMessage.textContent = message;
-            
-            // Configurar botones
-            modalCancelBtn.onclick = closeModal;
-            modalConfirmBtn.onclick = () => {
-                closeModal();
-                confirmCallback();
-            };
-            
-            // Mostrar modal
-            confirmationModal.style.display = 'flex';
+
+        function attachUserActionListeners() {
+            document.querySelectorAll('.change-password-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.dataset.userId;
+                    const username = this.dataset.username;
+                    openChangePasswordModal(userId, username);
+                });
+            });
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.dataset.userId;
+                    const username = this.dataset.username;
+                    confirmDeleteUser(userId, username);
+                });
+            });
         }
-        
-        // Cerrar modal
-        function closeModal() {
-            confirmationModal.style.display = 'none';
-        }
-        
-        // Mostrar confirmación para eliminar usuario
-        function showDeleteUserConfirmation(userId) {
+
+        function confirmDeleteUser(userId, username) {
             showModal(
-                'Eliminar Usuario', 
-                '¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.',
-                () => deleteUser(userId)
+                'Eliminar Usuario',
+                `¿Estás seguro de que deseas eliminar al usuario <strong>${username}</strong> (ID: ${userId})? Esta acción no se puede deshacer.`,
+                () => deleteUser(userId, username)
             );
         }
-        
-        // Eliminar usuario
-        async function deleteUser(userId) {
+
+        async function deleteUser(userId, username) {
+            const usersCardBody = usersTable.closest('.card-body');
             try {
-                setLoading(document.querySelector('.table-container'), true);
-                
-                const response = await fetchAPI(`/api/admin/users/delete`, {
+                setLoading(usersCardBody, true);
+                const response = await fetchAPI(`/api/admin/user/${userId}`, { // Usando nueva ruta DELETE
+                    method: 'DELETE',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                showAlert(`Usuario ${username} eliminado exitosamente.`, 'success');
+                loadUsers(); 
+                loadStats(); 
+            } catch (error) {
+                showAlert(`Error al eliminar usuario ${username}: ${error.message}`, 'danger');
+            } finally {
+                setLoading(usersCardBody, false);
+            }
+        }
+        
+        function openChangePasswordModal(userId, username) {
+            changePasswordUserIdInput.value = userId;
+            changePasswordUsernameSpan.textContent = username;
+            changePasswordErrorDiv.style.display = 'none';
+            changePasswordErrorDiv.textContent = '';
+            newPasswordInput.value = '';
+            confirmNewPasswordInput.value = '';
+            changePasswordModal.style.display = 'flex';
+            newPasswordInput.focus();
+        }
+
+        confirmChangePasswordBtn.addEventListener('click', async () => {
+            const userId = changePasswordUserIdInput.value;
+            const username = changePasswordUsernameSpan.textContent;
+            const newPasswordValue = newPasswordInput.value;
+            const confirmPasswordValue = confirmNewPasswordInput.value;
+
+            if (newPasswordValue.length < 6) {
+                changePasswordErrorDiv.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.';
+                changePasswordErrorDiv.style.display = 'block';
+                return;
+            }
+            if (newPasswordValue !== confirmPasswordValue) {
+                changePasswordErrorDiv.textContent = 'Las contraseñas no coinciden.';
+                changePasswordErrorDiv.style.display = 'block';
+                return;
+            }
+            changePasswordErrorDiv.style.display = 'none';
+            const modalContent = changePasswordModal.querySelector('.modal-content');
+            try {
+                setLoading(modalContent, true);
+                const response = await fetchAPI('/api/admin/user/change-password', {
                     method: 'POST',
-                    body: JSON.stringify({ 
-                        password: adminPassword,
-                        userId: userId
+                    body: JSON.stringify({
+                        password: adminPassword, 
+                        userId: userId,
+                        newPassword: newPasswordValue
                     })
                 });
-                
-                if (response.success) {
-                    showAlert('Usuario eliminado correctamente', 'success');
-                    // Recargar datos
-                    loadUsers();
-                    loadStats();
-                } else {
-                    showAlert(`Error al eliminar usuario: ${response.message}`, 'danger');
-                }
+                showAlert(`Contraseña para ${username} cambiada exitosamente.`, 'success');
+                closeModal('change-password-modal');
             } catch (error) {
-                showAlert(`Error al eliminar usuario: ${error.message}`, 'danger');
+                changePasswordErrorDiv.textContent = `Error: ${error.message}`;
+                changePasswordErrorDiv.style.display = 'block';
             } finally {
-                setLoading(document.querySelector('.table-container'), false);
+                setLoading(modalContent, false);
             }
-        }
-        
-        // Mostrar confirmación para eliminar todos los usuarios
-        deleteAllUsersBtn.addEventListener('click', () => {
-            showModal(
-                'Eliminar Todos los Usuarios',
-                '¿Estás seguro de que deseas eliminar TODOS los usuarios? Esta acción no se puede deshacer y desconectará a los usuarios activos.',
-                deleteAllUsers
-            );
         });
-        
-        // Eliminar todos los usuarios
-        async function deleteAllUsers() {
-            try {
-                setLoading(document.querySelector('.table-container'), true);
-                
-                const response = await fetchAPI('/api/admin/users/delete-all-including-connected', {
-                    method: 'POST',
-                    body: JSON.stringify({ password: adminPassword })
-                });
-                
-                if (response.success) {
-                    showAlert('Todos los usuarios han sido eliminados', 'success');
-                    // Recargar datos
-                    loadUsers();
-                    loadStats();
-                } else {
-                    showAlert(`Error al eliminar usuarios: ${response.message}`, 'danger');
-                }
-            } catch (error) {
-                showAlert(`Error al eliminar usuarios: ${error.message}`, 'danger');
-            } finally {
-                setLoading(document.querySelector('.table-container'), false);
+
+        // Funciones para Modales Genéricos
+        function showModal(title, message, onConfirmCallback) {
+            modalTitle.textContent = title;
+            modalMessage.innerHTML = message; 
+            currentConfirmAction = onConfirmCallback;
+            confirmationModal.style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            const modalToClose = document.getElementById(modalId);
+            if (modalToClose) {
+                modalToClose.style.display = 'none';
+            }
+             // Limpiar campos específicos del modal de cambio de contraseña si es ese el que se cierra
+            if (modalId === 'change-password-modal') {
+                newPasswordInput.value = '';
+                confirmNewPasswordInput.value = '';
+                changePasswordErrorDiv.style.display = 'none';
+                changePasswordErrorDiv.textContent = '';
             }
         }
         
-        // Mostrar confirmación para eliminar todos los mensajes
+        modalConfirmBtn.addEventListener('click', () => {
+            if (typeof currentConfirmAction === 'function') {
+                currentConfirmAction();
+            }
+            closeModal('confirmation-modal');
+        });
+        modalCancelBtn.addEventListener('click', () => closeModal('confirmation-modal'));
+        
+        window.addEventListener('click', (event) => {
+            if (event.target === confirmationModal) closeModal('confirmation-modal');
+            if (event.target === changePasswordModal) closeModal('change-password-modal');
+        });
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (confirmationModal.style.display === 'flex') closeModal('confirmation-modal');
+                if (changePasswordModal.style.display === 'flex') closeModal('change-password-modal');
+            }
+        });
+
+        // Acciones de Administración (Eliminar todo, etc.)
         deleteAllMessagesBtn.addEventListener('click', () => {
-            showModal(
-                'Eliminar Todos los Mensajes',
-                '¿Estás seguro de que deseas eliminar TODOS los mensajes? Esta acción no se puede deshacer.',
-                deleteAllMessages
-            );
-        });
-        
-        // Eliminar todos los mensajes
-        async function deleteAllMessages() {
-            try {
-                setLoading(document.querySelector('.card:nth-child(3)'), true);
-                
-                console.log('Iniciando eliminación de todos los mensajes...');
-                
-                // Primero intentamos con la ruta DELETE /api/admin/messages
-                let response;
+            showModal('Eliminar Todos los Mensajes', '¿Estás seguro de que deseas eliminar TODOS los mensajes? Esta acción no se puede deshacer.', async () => {
+                const cardBody = deleteAllMessagesBtn.closest('.card-body');
                 try {
-                    console.log('Intentando con método DELETE...');
-                    response = await fetchAPI('/api/admin/messages', {
-                        method: 'DELETE',
-                        body: JSON.stringify({ password: adminPassword })
-                    });
+                    setLoading(cardBody, true);
+                    await fetchAPI('/api/admin/messages', { method: 'DELETE', body: JSON.stringify({ password: adminPassword }) });
+                    showAlert('Todos los mensajes han sido eliminados.', 'success');
+                    loadStats();
                 } catch (error) {
-                    console.log('Error con DELETE, intentando ruta alternativa...');
-                    // Si falla, intentamos con la ruta POST /api/admin/messages/delete-all
-                    response = await fetchAPI('/api/admin/messages/delete-all', {
-                    method: 'POST',
-                    body: JSON.stringify({ password: adminPassword })
-                });
+                    showAlert(`Error al eliminar mensajes: ${error.message}`, 'danger');
+                } finally {
+                    setLoading(cardBody, false);
                 }
-                
-                if (response.success) {
-                    console.log('Mensajes eliminados correctamente:', response);
-                    showAlert('Todos los mensajes han sido eliminados', 'success');
-                    // Recargar estadísticas
-                    loadStats();
-                } else {
-                    console.error('Error al eliminar mensajes:', response);
-                    showAlert(`Error al eliminar mensajes: ${response.message}`, 'danger');
-                }
-            } catch (error) {
-                console.error('Excepción al eliminar mensajes:', error);
-                showAlert(`Error al eliminar mensajes: ${error.message}`, 'danger');
-            } finally {
-                setLoading(document.querySelector('.card:nth-child(3)'), false);
-            }
-        }
-        
-        // Mostrar confirmación para reinicio completo
+            });
+        });
+
         resetEverythingBtn.addEventListener('click', () => {
-            showModal(
-                'Reinicio Completo del Sistema',
-                '¡ADVERTENCIA! Esta acción eliminará TODOS los usuarios y mensajes del sistema. Esta operación no se puede deshacer y desconectará a todos los usuarios. ¿Estás completamente seguro?',
-                resetEverything
-            );
+            showModal('Reinicio Completo del Sistema', '¡ADVERTENCIA! Esta acción eliminará TODOS los usuarios y mensajes. No se puede deshacer. ¿Estás seguro?', async () => {
+                const cardBody = resetEverythingBtn.closest('.card-body');
+                try {
+                    setLoading(cardBody, true);
+                    await fetchAPI('/api/admin/messages', { method: 'DELETE', body: JSON.stringify({ password: adminPassword }) });
+                    await fetchAPI('/api/admin/users', { method: 'DELETE', body: JSON.stringify({ password: adminPassword }) }); // Asumiendo que esta ruta borra todos los usuarios
+                    showAlert('Sistema reiniciado correctamente.', 'success');
+                    loadInitialData();
+                } catch (error) {
+                    showAlert(`Error al reiniciar el sistema: ${error.message}`, 'danger');
+                } finally {
+                    setLoading(cardBody, false);
+                }
+            });
         });
         
-        // Reinicio completo
-        async function resetEverything() {
-            try {
-                setLoading(document.querySelector('.card:nth-child(4)'), true);
-                
-                console.log('Iniciando reinicio completo del sistema...');
-                
-                // Eliminar todos los mensajes (con manejo de errores y alternativa)
-                let messagesResponse;
-                try {
-                    console.log('Eliminando todos los mensajes (método DELETE)...');
-                    messagesResponse = await fetchAPI('/api/admin/messages', {
-                        method: 'DELETE',
-                        body: JSON.stringify({ password: adminPassword })
-                    });
-                } catch (deleteError) {
-                    console.log('Error con DELETE, intentando ruta alternativa para mensajes...');
-                    messagesResponse = await fetchAPI('/api/admin/messages/delete-all', {
-                    method: 'POST',
-                    body: JSON.stringify({ password: adminPassword })
-                });
-                }
-                
-                console.log('Respuesta eliminación de mensajes:', messagesResponse);
-                
-                // Eliminar todos los usuarios
-                console.log('Eliminando todos los usuarios...');
-                const usersResponse = await fetchAPI('/api/admin/users/delete-all-including-connected', {
-                    method: 'POST',
-                    body: JSON.stringify({ password: adminPassword })
-                });
-                
-                console.log('Respuesta eliminación de usuarios:', usersResponse);
-                
-                if (messagesResponse.success && usersResponse.success) {
-                    showAlert('Sistema reiniciado correctamente', 'success');
-                    // Recargar datos
-                    loadUsers();
-                    loadStats();
-                } else {
-                    let errorMsg = '';
-                    if (!messagesResponse.success) errorMsg += 'Error al eliminar mensajes. ';
-                    if (!usersResponse.success) errorMsg += 'Error al eliminar usuarios.';
-                    showAlert(errorMsg, 'danger');
-                }
-            } catch (error) {
-                console.error('Error al reiniciar sistema:', error);
-                showAlert(`Error al reiniciar sistema: ${error.message}`, 'danger');
-            } finally {
-                setLoading(document.querySelector('.card:nth-child(4)'), false);
-            }
-        }
-        
-        // Eventos para botones de actualizar
+        // Eventos para botones de actualizar generales
         refreshStatsBtn.addEventListener('click', loadStats);
         refreshUsersBtn.addEventListener('click', loadUsers);
-        
-        // Cerrar modal si se hace clic fuera
-        window.addEventListener('click', (e) => {
-            if (e.target === confirmationModal) {
-                closeModal();
-            }
-        });
-        
-        // Manejar tecla ESC para cerrar modal
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && confirmationModal.style.display === 'flex') {
-                closeModal();
-            }
-        });
+
     </script>
 </body>
 </html> 
