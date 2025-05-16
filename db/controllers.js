@@ -600,7 +600,7 @@ const messageController = {
     // Guardar un mensaje con archivo multimedia
     async saveMediaMessage(username, userId, messageData) {
         try {
-            const { fileBuffer, fileType, fileName, fileSize, text } = messageData;
+            const { fileBuffer, fileType, fileName, fileSize, text, room = 'general' } = messageData;
 
             // Verificar que tenemos el buffer del archivo
             if (!fileBuffer || !Buffer.isBuffer(fileBuffer)) {
@@ -613,7 +613,7 @@ const messageController = {
                 throw new Error('Error del servidor al preparar almacenamiento de archivos.');
             }
 
-            console.log(`Guardando archivo en GridFS: ${fileName}, Tipo: ${fileType}, Tamaño: ${fileSize} bytes`);
+            console.log(`Guardando archivo en GridFS: ${fileName}, Tipo: ${fileType}, Tamaño: ${fileSize} bytes, Sala: ${room}`);
 
                     const fileId = new mongoose.Types.ObjectId();
             let contentType = fileType;
@@ -634,7 +634,8 @@ const messageController = {
                             username,
                             userId,
                 originalName: fileName,
-                clientFileType: fileType
+                clientFileType: fileType,
+                room: room // Añadir la sala a los metadatos
             };
                         
             const uploadStream = gridFSBucket.openUploadStreamWithId(fileId, fileName || `file_${Date.now()}`, {
@@ -655,6 +656,7 @@ const messageController = {
                 text: text || '',
                 username,
                 userId,
+                room: room, // Añadir la sala al mensaje
                 time: formatTime(),
                 fileType: fileType,
                 fileName: fileName,
@@ -673,6 +675,7 @@ const messageController = {
                  userId: savedMessage.userId,
                  time: savedMessage.time,
                  text: savedMessage.text,
+                 room: room, // Incluir la sala en el mensaje de confirmación
                  fileType: savedMessage.fileType,
                  fileName: savedMessage.fileName,
                  fileSize: savedMessage.fileSize,

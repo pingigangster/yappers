@@ -1502,15 +1502,16 @@ io.on('connection', async (socket) => {
                 console.error(`Error al enviar salas filtradas a ${username}:`, roomError);
             }
             
-            // 2. Obtener y enviar mensajes históricos
+            // 2. Obtener y enviar mensajes históricos (solo de la sala 'general' inicialmente)
             try {
-                console.log(`Obteniendo mensajes históricos para ${username}...`);
-                const recentMessages = await messageController.getRecentMessages(50);
-                console.log(`Enviando ${recentMessages.length} mensajes históricos a ${username}`);
+                console.log(`Obteniendo mensajes históricos de sala general para ${username}...`);
+                // Usar getMessagesByRoom en lugar de getRecentMessages para filtrar por sala
+                const recentMessages = await messageController.getMessagesByRoom('general', 50);
+                console.log(`Enviando ${recentMessages.length} mensajes históricos de sala general a ${username}`);
                 
                 // Siempre enviar el array de mensajes, incluso si está vacío
                 socket.emit('historicalMessages', recentMessages || []);
-                console.log(`Mensajes históricos enviados a ${username}`);
+                console.log(`Mensajes históricos de sala general enviados a ${username}`);
             } catch (msgError) {
                 console.error(`Error al obtener mensajes históricos para ${username}:`, msgError);
                 // En caso de error, enviar un array vacío para completar el flujo de carga
@@ -1584,12 +1585,16 @@ io.on('connection', async (socket) => {
                     ? data.text.substring(0, MAX_MESSAGE_LENGTH) 
                     : data.text || '';
                 
+                // Usar la sala actual del usuario
+                const room = data.room || 'general';
+                
             const result = await messageController.saveMediaMessage(user.username, socket.id, {
                 fileBuffer: data.fileBuffer,
-                    fileType: data.fileType,
-                    fileName: data.fileName,
+                fileType: data.fileType,
+                fileName: data.fileName,
                 fileSize: data.fileSize || data.fileBuffer.length,
-                text: validatedText
+                text: validatedText,
+                room: room  // Pasar la sala al controlador
             });
 
                 clearTimeout(operationTimeout);
@@ -1600,8 +1605,9 @@ io.on('connection', async (socket) => {
             }
 
             if (result.success && result.confirmedMessage) {
-                console.log(`Archivo ${data.fileName} guardado y mensaje creado (${result.confirmedMessage._id}). Emitiendo broadcast.`);
-                socket.broadcast.emit('mediaMessage', result.confirmedMessage);
+                console.log(`Archivo ${data.fileName} guardado y mensaje creado (${result.confirmedMessage._id}). Emitiendo broadcast a sala ${room}.`);
+                // Emitir solo a la sala actual
+                socket.to(room).emit('mediaMessage', result.confirmedMessage);
                         callback({
                             success: true, 
                     confirmedMessage: result.confirmedMessage

@@ -5,6 +5,7 @@
     --primary-light: #a29bfe;
     --secondary-color: #00b894;
     --dark-color: #2d3436;
+    --dark-color-a: #2c3e50;
     --light-color: #f9f9f9;
     --danger-color: #e74c3c;
     --shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
@@ -67,7 +68,7 @@ body.join-page {
 }
 
 .chat-header, .join-header {
-    background: var(--primary-color);
+    background: #2c3e50 !important;
     color: #fff;
     padding: 15px 20px;
     position: relative;
@@ -82,6 +83,7 @@ body.join-page {
     align-items: center;
     border-radius: 0;
     width: 100vw;
+    background: #2c3e50 !important;
 }
 
 .chat-header h1, .join-header h1 {
@@ -2157,7 +2159,7 @@ body.join-page {
 
 /* Ajustar el header para mostrar correctamente los elementos */
 .chat-header {
-    background: var(--dark-color-a);
+    background: #2c3e50;
     color: #fff;
     padding: 15px;
     display: flex;

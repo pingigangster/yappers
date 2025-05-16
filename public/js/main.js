@@ -1177,7 +1177,8 @@ function handleMediaUploadInternal(file, text) {
                     text: text,
                     fileType: fileType,
                     fileName: file.name,
-                    fileSize: file.size
+                    fileSize: file.size,
+                    room: currentRoom // Añadir sala actual
                 };
                 
                 const uploadTimeout = setTimeout(() => {
