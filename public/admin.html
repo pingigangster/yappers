@@ -718,12 +718,6 @@
                     <button id="add-room-btn" class="btn btn-primary">
                         <i class="fas fa-plus"></i> Añadir Sala
                     </button>
-                    <button id="init-default-rooms-btn" class="btn btn-secondary">
-                        <i class="fas fa-redo"></i> Reiniciar Salas Predeterminadas
-                    </button>
-                    <button id="reset-default-state-btn" class="btn btn-warning">
-                        <i class="fas fa-exclamation-triangle"></i> Arreglar Estado Predeterminado
-                    </button>
                     <button id="clean-rooms-btn" class="btn btn-danger">
                         <i class="fas fa-trash"></i> Eliminar Todas (Excepto General)
                     </button>
@@ -737,8 +731,6 @@
                                 <th>Slug</th>
                                 <th>Descripción</th>
                                 <th>Rol Requerido</th>
-                                <th>Privada</th>
-                                <th>Predeterminada</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -788,7 +780,6 @@
                                 <th>Nombre</th>
                                 <th>Identificador</th>
                                 <th>Descripción</th>
-                                <th>Predeterminado</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -881,18 +872,6 @@
                 </div>
                 <input type="hidden" id="room-required-role" name="room-required-role" value="none">
             </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="room-is-private" name="room-is-private">
-                    Sala Privada (Solo usuarios específicos)
-                </label>
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="room-is-default" name="room-is-default">
-                    Sala Predeterminada (No se puede eliminar)
-                </label>
-            </div>
             <div id="room-error" style="color: red; display: none; margin-bottom: 15px;"></div>
             <div class="modal-footer">
                 <button id="save-room-btn" class="btn btn-primary">Guardar</button>
@@ -958,12 +937,6 @@
                 <label for="role-color">Color</label>
                 <input type="color" id="role-color" name="role-color" value="#3498db">
                 <small class="form-text text-muted">Color para mostrar el rol en la interfaz</small>
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="role-is-default" name="role-is-default">
-                    Rol Predeterminado (No se puede eliminar)
-                </label>
             </div>
             <div id="role-error" style="color: red; display: none; margin-bottom: 15px;"></div>
             <div class="modal-footer">
@@ -1050,7 +1023,6 @@
         const roleIdentifierInput = document.getElementById('role-identifier');
         const roleDescriptionInput = document.getElementById('role-description');
         const roleColorInput = document.getElementById('role-color');
-        const roleIsDefaultCheckbox = document.getElementById('role-is-default');
         const saveRoleBtn = document.getElementById('save-role-btn');
         const roleErrorDiv = document.getElementById('role-error');
         
@@ -1501,6 +1473,26 @@
                 
                 // Limpiar el contenedor de roles personalizados para evitar duplicación
                 rolesContainer.innerHTML = '';
+            } else if (modalId === 'room-modal') {
+                // Limpiar errores
+                roomErrorDiv.style.display = 'none';
+                roomErrorDiv.textContent = '';
+                
+                // Resetear selección de roles
+                const roomRolesContainer = document.getElementById('room-roles-container');
+                const customRolesContainer = document.getElementById('room-custom-roles-container');
+                
+                if (roomRolesContainer) {
+                    const roleBtns = roomRolesContainer.querySelectorAll('.role-btn');
+                    roleBtns.forEach(btn => {
+                        btn.classList.remove('selected');
+                        updateRoleButtonStyle(btn, false);
+                    });
+                }
+                
+                if (customRolesContainer) {
+                    customRolesContainer.innerHTML = '';
+                }
             }
         }
 
@@ -1573,7 +1565,6 @@
         const roomsTable = document.getElementById('rooms-table');
         const refreshRoomsBtn = document.getElementById('refresh-rooms');
         const addRoomBtn = document.getElementById('add-room-btn');
-        const initDefaultRoomsBtn = document.getElementById('init-default-rooms-btn');
         const roomModal = document.getElementById('room-modal');
         const roomModalTitle = document.getElementById('room-modal-title');
         const roomIdInput = document.getElementById('room-id');
@@ -1581,10 +1572,9 @@
         const roomSlugInput = document.getElementById('room-slug');
         const roomDescriptionInput = document.getElementById('room-description');
         const roomRequiredRoleSelect = document.getElementById('room-required-role');
-        const roomIsPrivateCheckbox = document.getElementById('room-is-private');
-        const roomIsDefaultCheckbox = document.getElementById('room-is-default');
         const saveRoomBtn = document.getElementById('save-room-btn');
         const roomErrorDiv = document.getElementById('room-error');
+        const cleanRoomsBtn = document.getElementById('clean-rooms-btn');
         
         // Cargar salas al inicio
         async function loadRooms() {
@@ -1609,7 +1599,7 @@
                 
                 if (response.success && response.rooms) {
                     if (response.rooms.length === 0) {
-                        roomsTableBody.innerHTML = '<tr><td colspan="8" class="empty-message">No hay salas disponibles.</td></tr>';
+                        roomsTableBody.innerHTML = '<tr><td colspan="6" class="empty-message">No hay salas disponibles.</td></tr>';
                     } else {
                         roomsTableBody.innerHTML = '';
                         response.rooms.forEach(room => {
@@ -1620,8 +1610,6 @@
                                     <td>${escapeHTML(room.slug)}</td>
                                     <td>${escapeHTML(room.description || '')}</td>
                                     <td>${escapeHTML(room.requiredRole)}</td>
-                                    <td>${room.isPrivate ? 'Sí' : 'No'}</td>
-                                    <td>${room.isDefault ? 'Sí' : 'No'}</td>
                                     <td class="actions">
                                         <button class="icon-btn edit-room-btn" title="Editar Sala" data-room-id="${room._id}">
                                             <i class="fas fa-edit"></i>
@@ -1639,14 +1627,14 @@
                         });
                     }
                 } else {
-                    roomsTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Error al cargar salas: ${response.message || 'Desconocido'}</td></tr>`;
+                    roomsTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Error al cargar salas: ${response.message || 'Desconocido'}</td></tr>`;
                 }
                 
                 // Añadir event listeners después de crear las filas
                 attachRoomActionListeners();
             } catch (error) {
                 showAlert(`Error al cargar salas: ${error.message}`, 'danger');
-                roomsTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Error crítico al cargar salas.</td></tr>`;
+                roomsTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Error crítico al cargar salas.</td></tr>`;
             } finally {
                 setLoading(roomsCardBody, false);
                 refreshRoomsBtn.classList.remove('loading');
@@ -1685,8 +1673,6 @@
             const roomRequiredRoleInput = document.getElementById('room-required-role');
             roomRequiredRoleInput.value = 'none';
             
-            roomIsPrivateCheckbox.checked = false;
-            roomIsDefaultCheckbox.checked = false;
             roomErrorDiv.style.display = 'none';
             roomErrorDiv.textContent = '';
             
@@ -1700,14 +1686,21 @@
         // Abrir modal para editar una sala existente
         async function editRoom(roomId) {
             try {
-                // Usamos POST en lugar de PUT para obtener los detalles de la sala
+                const roomsCardBody = document.querySelector('.card-body');
+                setLoading(roomsCardBody, true);
+                
+                // Obtener detalles de la sala
                 const response = await fetchAPI(`/api/admin/room/${roomId}`, {
                     method: 'POST',
                     body: JSON.stringify({ password: adminPassword })
                 });
                 
+                setLoading(roomsCardBody, false);
+                
                 if (response.success && response.room) {
                     const room = response.room;
+                    
+                    // Configurar el modal
                     roomModalTitle.textContent = 'Editar Sala';
                     roomIdInput.value = room._id;
                     roomNameInput.value = room.name;
@@ -1718,19 +1711,60 @@
                     const roomRequiredRoleInput = document.getElementById('room-required-role');
                     roomRequiredRoleInput.value = room.requiredRole || 'none';
                     
-                    // Cargar roles personalizados (ahora con la interfaz visual)
-                    await loadRolesForSelect();
+                    // Si es la sala General, deshabilitar algunas opciones
+                    const isGeneralRoom = room.slug === 'general';
+                    if (isGeneralRoom) {
+                        roomSlugInput.disabled = true;
+                        
+                        // Añadir mensaje de advertencia
+                        const warningMessage = document.createElement('div');
+                        warningMessage.id = 'general-room-warning';
+                        warningMessage.className = 'warning-message';
+                        warningMessage.style.backgroundColor = 'rgba(243, 156, 18, 0.1)';
+                        warningMessage.style.padding = '10px';
+                        warningMessage.style.borderRadius = '5px';
+                        warningMessage.style.marginBottom = '15px';
+                        warningMessage.style.color = '#f39c12';
+                        warningMessage.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Esta es la sala General. No se puede cambiar el slug.';
+                        
+                        const formGroups = roomModal.querySelectorAll('.form-group');
+                        const slugFormGroup = Array.from(formGroups).find(group => group.querySelector('#room-slug'));
+                        
+                        // Eliminar mensaje existente si hay uno
+                        const existingWarning = document.getElementById('general-room-warning');
+                        if (existingWarning) {
+                            existingWarning.remove();
+                        }
+                        
+                        if (slugFormGroup) {
+                            slugFormGroup.after(warningMessage);
+                        }
+                    } else {
+                        roomSlugInput.disabled = false;
+                        
+                        // Eliminar mensaje de advertencia si existe
+                        const warningMessage = document.getElementById('general-room-warning');
+                        if (warningMessage) {
+                            warningMessage.remove();
+                        }
+                    }
                     
-                    roomIsPrivateCheckbox.checked = room.isPrivate;
-                    roomIsDefaultCheckbox.checked = room.isDefault;
+                    // Limpiar errores previos
                     roomErrorDiv.style.display = 'none';
                     roomErrorDiv.textContent = '';
+                    
+                    // Cargar roles personalizados con la interfaz visual
+                    await loadRolesForSelect();
+                    
+                    // Mostrar el modal
                     roomModal.style.display = 'flex';
                     roomNameInput.focus();
+                    
                 } else {
-                    showAlert(`Error al cargar sala: ${response.message}`, 'danger');
+                    showAlert(`Error al cargar sala: ${response.message || 'No se pudo obtener la información'}`, 'danger');
                 }
             } catch (error) {
+                console.error('Error al cargar sala para editar:', error);
                 showAlert(`Error al cargar sala: ${error.message}`, 'danger');
             }
         }
@@ -1745,22 +1779,64 @@
                 // Obtener el valor actual del rol requerido
                 const currentRequiredRole = roomRequiredRoleInput.value;
                 
-                // Configurar botones de roles del sistema
-                const systemRoleBtns = roomRolesContainer.querySelectorAll('.role-btn');
-                
-                // Resetear todas las selecciones
-                systemRoleBtns.forEach(btn => {
-                    btn.classList.remove('selected');
+                // Función reutilizable para manejar el clic en un botón de rol
+                function handleRoomRoleBtnClick(event) {
+                    const btn = event.currentTarget;
+                    const allRoleButtons = [
+                        ...roomRolesContainer.querySelectorAll('.role-btn'),
+                        ...roomCustomRolesContainer.querySelectorAll('.custom-role-btn')
+                    ];
                     
-                    // Si este es el rol actual, marcarlo como seleccionado
-                    if (btn.dataset.role === currentRequiredRole) {
-                        btn.classList.add('selected');
+                    // Desmarcar todos los botones
+                    allRoleButtons.forEach(button => {
+                        button.classList.remove('selected');
+                        if (button.classList.contains('role-btn')) {
+                            updateRoleButtonStyle(button, false);
+                        } else if (button.classList.contains('custom-role-btn')) {
+                            // Botón de rol personalizado
+                            const textColor = button.style.color;
+                            const bgColor = button.style.backgroundColor.replace('0.4', '0.2');
+                            button.style.backgroundColor = bgColor;
+                            button.style.border = `2px solid ${textColor}40`;
+                        }
+                    });
+                    
+                    // Marcar este botón como seleccionado
+                    btn.classList.add('selected');
+                    
+                    // Actualizar estilos según el tipo de botón
+                    if (btn.classList.contains('role-btn')) {
                         updateRoleButtonStyle(btn, true);
+                    } else if (btn.classList.contains('custom-role-btn')) {
+                        const textColor = btn.style.color;
+                        const bgColorHigher = btn.style.backgroundColor.replace('0.2', '0.4');
+                        btn.style.backgroundColor = bgColorHigher;
+                        btn.style.border = `2px solid ${textColor}`;
                     }
                     
-                    // Asegurarse de que el evento click está asignado (solo una vez)
-                    btn.removeEventListener('click', handleRoomRoleSelection);
-                    btn.addEventListener('click', handleRoomRoleSelection);
+                    // Actualizar el valor del input hidden
+                    roomRequiredRoleInput.value = btn.dataset.role;
+                    console.log(`Rol requerido seleccionado: ${btn.dataset.role}`);
+                }
+                
+                // Resetear botones de roles del sistema
+                const systemRoleBtns = roomRolesContainer.querySelectorAll('.role-btn');
+                systemRoleBtns.forEach(btn => {
+                    // Eliminar todos los event listeners anteriores
+                    const newBtn = btn.cloneNode(true);
+                    btn.parentNode.replaceChild(newBtn, btn);
+                    
+                    // Añadir nuevo event listener
+                    newBtn.addEventListener('click', handleRoomRoleBtnClick);
+                    
+                    // Marcar como seleccionado si es el rol actual
+                    if (newBtn.dataset.role === currentRequiredRole) {
+                        newBtn.classList.add('selected');
+                        updateRoleButtonStyle(newBtn, true);
+                    } else {
+                        newBtn.classList.remove('selected');
+                        updateRoleButtonStyle(newBtn, false);
+                    }
                 });
                 
                 // Limpiar el contenedor de roles personalizados
@@ -1806,7 +1882,7 @@
                             
                             roleBtn.style.backgroundColor = bgColor;
                             roleBtn.style.color = textColor;
-                            roleBtn.style.border = `2px solid ${textColor}40`; // 40 es 25% de opacidad en hex
+                            roleBtn.style.border = `2px solid ${textColor}40`;
                             roleBtn.style.borderRadius = '30px';
                             roleBtn.style.padding = '8px 15px';
                             roleBtn.style.fontWeight = '600';
@@ -1820,8 +1896,8 @@
                                 roleBtn.style.border = `2px solid ${textColor}`;
                             }
                             
-                            // Evento para seleccionar este rol
-                            roleBtn.addEventListener('click', handleRoomRoleSelection);
+                            // Evento para seleccionar este rol (usar el mismo manejador)
+                            roleBtn.addEventListener('click', handleRoomRoleBtnClick);
                             
                             rolesGrid.appendChild(roleBtn);
                         });
@@ -1928,29 +2004,24 @@
         // Eliminar sala
         async function deleteRoom(roomId) {
             try {
-                // Usar el endpoint de emergencia
                 console.log("Intentando eliminar sala con ID:", roomId);
                 
-                const response = await fetch('/api/admin/emergency/delete-room', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                // Usar la ruta estándar en lugar de la de emergencia
+                const response = await fetchAPI(`/api/admin/room/${roomId}`, {
+                    method: 'DELETE',
                     body: JSON.stringify({ 
-                        roomId: roomId,
                         password: adminPassword 
                     })
                 });
                 
-                const data = await response.json();
-                console.log("Respuesta recibida:", data);
+                console.log("Respuesta recibida:", response);
                 
-                if (data.success) {
-                    showAlert('Sala eliminada correctamente (modo emergencia)', 'success');
+                if (response.success) {
+                    showAlert('Sala eliminada correctamente', 'success');
                     loadRooms();
                 } else {
-                    showAlert(`Error al eliminar sala: ${data.message}`, 'danger');
-                    console.error("Detalles del error:", data);
+                    showAlert(`Error al eliminar sala: ${response.message}`, 'danger');
+                    console.error("Detalles del error:", response);
                 }
             } catch (error) {
                 showAlert(`Error crítico al eliminar sala: ${error.message}`, 'danger');
@@ -1961,22 +2032,37 @@
         // Guardar sala (crear o actualizar)
         saveRoomBtn.addEventListener('click', async () => {
             try {
-                // Validar campos
+                // Validación mejorada
+                const errors = [];
+                
                 if (!roomNameInput.value.trim()) {
-                    roomErrorDiv.textContent = 'El nombre de la sala es obligatorio';
+                    errors.push('El nombre de la sala es obligatorio');
+                }
+                
+                if (roomNameInput.value.trim().length < 3) {
+                    errors.push('El nombre debe tener al menos 3 caracteres');
+                }
+                
+                if (roomSlugInput.value && !/^[a-z0-9-]+$/.test(roomSlugInput.value)) {
+                    errors.push('El slug solo puede contener letras minúsculas, números y guiones');
+                }
+                
+                // Mostrar errores si existen
+                if (errors.length > 0) {
+                    roomErrorDiv.innerHTML = errors.map(error => `<p>${error}</p>`).join('');
                     roomErrorDiv.style.display = 'block';
                     return;
                 }
                 
+                // Preparar datos
                 const roomData = {
                     name: roomNameInput.value.trim(),
-                    slug: roomSlugInput.value.trim() || null, // Si está vacío, se generará automáticamente
+                    slug: roomSlugInput.value.trim() || null,
                     description: roomDescriptionInput.value.trim(),
-                    requiredRole: roomRequiredRoleSelect.value,
-                    isPrivate: roomIsPrivateCheckbox.checked,
-                    isDefault: roomIsDefaultCheckbox.checked
+                    requiredRole: roomRequiredRoleSelect.value
                 };
                 
+                // Mostrar animación de carga
                 const modalContent = roomModal.querySelector('.modal-content');
                 setLoading(modalContent, true);
                 
@@ -2006,11 +2092,12 @@
                     closeModal('room-modal');
                     loadRooms();
                 } else {
-                    roomErrorDiv.textContent = response.message || 'Error al guardar sala';
+                    roomErrorDiv.innerHTML = `<p>${response.message || 'Error al guardar sala'}</p>`;
                     roomErrorDiv.style.display = 'block';
                 }
             } catch (error) {
-                roomErrorDiv.textContent = error.message || 'Error al guardar sala';
+                console.error('Error al guardar sala:', error);
+                roomErrorDiv.innerHTML = `<p>${error.message || 'Error al guardar sala'}</p>`;
                 roomErrorDiv.style.display = 'block';
             } finally {
                 const modalContent = roomModal.querySelector('.modal-content');
@@ -2018,67 +2105,9 @@
             }
         });
         
-        // Inicializar salas predeterminadas
-        initDefaultRoomsBtn.addEventListener('click', async () => {
-            try {
-                showModal(
-                    'Inicializar Salas Predeterminadas',
-                    '¿Estás seguro de que deseas reiniciar las salas predeterminadas? Las salas existentes no se eliminarán.',
-                    async () => {
-                        try {
-                            const response = await fetchAPI('/api/admin/rooms/initialize', {
-                                method: 'POST',
-                                body: JSON.stringify({ password: adminPassword })
-                            });
-                            
-                            if (response.success) {
-                                showAlert('Salas predeterminadas inicializadas correctamente', 'success');
-                                loadRooms();
-                            } else {
-                                showAlert(`Error al inicializar salas: ${response.message}`, 'danger');
-                            }
-                        } catch (error) {
-                            showAlert(`Error al inicializar salas: ${error.message}`, 'danger');
-                        }
-                    }
-                );
-            } catch (error) {
-                showAlert(`Error: ${error.message}`, 'danger');
-            }
-        });
-        
-        // Botón para arreglar estado predeterminado
-        const resetDefaultStateBtn = document.getElementById('reset-default-state-btn');
-        resetDefaultStateBtn.addEventListener('click', async () => {
-            try {
-                showModal(
-                    'Arreglar Estado Predeterminado',
-                    'Esto restablecerá el estado predeterminado de todas las salas, haciendo que SOLO la sala "General" sea predeterminada. ¿Deseas continuar?',
-                    async () => {
-                        try {
-                            const response = await fetchAPI('/api/admin/rooms/reset-default-state', {
-                                method: 'POST',
-                                body: JSON.stringify({ password: adminPassword })
-                            });
-                            
-                            if (response.success) {
-                                showAlert('Estado predeterminado de salas corregido correctamente', 'success');
-                                loadRooms();
-                            } else {
-                                showAlert(`Error al arreglar estado: ${response.message}`, 'danger');
-                            }
-                        } catch (error) {
-                            showAlert(`Error al arreglar estado: ${error.message}`, 'danger');
-                        }
-                    }
-                );
-            } catch (error) {
-                showAlert(`Error: ${error.message}`, 'danger');
-            }
-        });
+
         
         // Botón para eliminar todas las salas excepto General
-        const cleanRoomsBtn = document.getElementById('clean-rooms-btn');
         cleanRoomsBtn.addEventListener('click', async () => {
             try {
                 showModal(
@@ -2111,27 +2140,22 @@
                             
                             const deletePromises = roomsToDelete.map(async room => {
                                 try {
-                                    console.log(`Eliminando sala en modo emergencia: ${room.name} (${room._id})`);
+                                    console.log(`Eliminando sala: ${room.name} (${room._id})`);
                                     
-                                    const response = await fetch('/api/admin/emergency/delete-room', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json'
-                                        },
+                                    const response = await fetchAPI(`/api/admin/room/${room._id}`, {
+                                        method: 'DELETE',
                                         body: JSON.stringify({ 
-                                            roomId: room._id,
                                             password: adminPassword 
                                         })
                                     });
                                     
-                                    const data = await response.json();
-                                    console.log(`Respuesta para sala ${room.name}:`, data);
+                                    console.log(`Respuesta para sala ${room.name}:`, response);
                                     
-                                    if (data.success) {
+                                    if (response.success) {
                                         successCount++;
                                     } else {
                                         errorCount++;
-                                        console.error(`Error al eliminar sala ${room.name}: ${data.message}`, data);
+                                        console.error(`Error al eliminar sala ${room.name}: ${response.message}`, response);
                                     }
                                 } catch (deleteError) {
                                     errorCount++;
@@ -2480,35 +2504,15 @@
                                     <td>${colorPreview}${escapeHTML(role.name)}</td>
                                     <td>${escapeHTML(role.identifier)}</td>
                                     <td>${escapeHTML(role.description || '')}</td>
-                                    <td>
-                                        ${role.isDefault ? 'Sí' : 'No'}
-                                        ${!isSystemRole && role.isDefault ? 
-                                            `<button class="btn btn-sm btn-warning toggle-default-btn" 
-                                                title="Desmarcar como predeterminado" 
-                                                data-role-id="${role._id}" 
-                                                data-role-name="${escapeHTML(role.name)}"
-                                                data-is-default="false">
-                                                <i class="fas fa-star"></i>
-                                            </button>` : 
-                                            !isSystemRole && !role.isDefault ? 
-                                            `<button class="btn btn-sm btn-outline-warning toggle-default-btn" 
-                                                title="Marcar como predeterminado" 
-                                                data-role-id="${role._id}" 
-                                                data-role-name="${escapeHTML(role.name)}"
-                                                data-is-default="true">
-                                                <i class="far fa-star"></i>
-                                            </button>` : ''
-                                        }
-                                    </td>
                                     <td class="actions">
                                         <button class="icon-btn edit-role-btn" title="Editar Rol" data-role-id="${role._id}" ${isSystemRole ? 'disabled' : ''}>
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button class="icon-btn delete-role-btn ${isSystemRole || role.isDefault ? 'disabled' : ''}" 
-                                            title="${isSystemRole ? 'No se puede eliminar un rol del sistema' : role.isDefault ? 'Desmarque como predeterminado primero' : 'Eliminar Rol'}" 
+                                        <button class="icon-btn delete-role-btn ${isSystemRole ? 'disabled' : ''}" 
+                                            title="${isSystemRole ? 'No se puede eliminar un rol del sistema' : 'Eliminar Rol'}" 
                                             data-role-id="${role._id}" 
                                             data-role-name="${escapeHTML(role.name)}"
-                                            ${isSystemRole || role.isDefault ? 'disabled' : ''}>
+                                            ${isSystemRole ? 'disabled' : ''}>
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </td>
@@ -2552,15 +2556,7 @@
                 }
             });
             
-            // Añadir listener para botones de cambiar estado predeterminado
-            document.querySelectorAll('.toggle-default-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const roleId = this.dataset.roleId;
-                    const roleName = this.dataset.roleName;
-                    const isDefault = this.dataset.isDefault === 'true';
-                    toggleDefaultStatus(roleId, roleName, isDefault);
-                });
-            });
+    
         }
         
         // Abrir modal para añadir un nuevo rol
@@ -2571,7 +2567,6 @@
             roleIdentifierInput.value = '';
             roleDescriptionInput.value = '';
             roleColorInput.value = '#3498db';
-            roleIsDefaultCheckbox.checked = false;
             roleErrorDiv.style.display = 'none';
             roleErrorDiv.textContent = '';
             
@@ -2613,7 +2608,6 @@
                     roleIdentifierInput.value = role.identifier;
                     roleDescriptionInput.value = role.description || '';
                     roleColorInput.value = role.color || '#3498db';
-                    roleIsDefaultCheckbox.checked = role.isDefault;
                     roleErrorDiv.style.display = 'none';
                     roleErrorDiv.textContent = '';
                     roleModal.style.display = 'flex';
@@ -2698,8 +2692,7 @@
                     name: roleNameInput.value.trim(),
                     identifier: identifier, // Usar el identificador generado o proporcionado
                     description: roleDescriptionInput.value.trim(),
-                    color: roleColorInput.value,
-                    isDefault: roleIsDefaultCheckbox.checked
+                    color: roleColorInput.value
                 };
                 
                 const modalContent = roleModal.querySelector('.modal-content');
@@ -2759,30 +2752,7 @@
         // Añadir los botones de roles a los listeners de eventos de cierre
         refreshRolesBtn.addEventListener('click', loadCustomRoles);
 
-        // Después de la función deleteRole, añadir la nueva función toggleDefaultStatus:
-        // Cambiar el estado predeterminado de un rol
-        async function toggleDefaultStatus(roleId, roleName, isDefault) {
-            try {
-                const response = await fetchAPI(`/api/admin/custom-role/${roleId}/default-status`, {
-                    method: 'PUT',
-                    body: JSON.stringify({ 
-                        password: adminPassword,
-                        isDefault: isDefault
-                    })
-                });
-                
-                if (response.success) {
-                    showAlert(`Estado del rol ${roleName} cambiado a ${isDefault ? 'predeterminado' : 'no predeterminado'} correctamente`, 'success');
-                    loadCustomRoles();
-                    // También actualizamos los usuarios para reflejar los cambios en los roles
-                    loadUsers();
-                } else {
-                    showAlert(`Error al cambiar estado del rol: ${response.message}`, 'danger');
-                }
-            } catch (error) {
-                showAlert(`Error al cambiar estado del rol: ${error.message}`, 'danger');
-            }
-        }
+
     </script>
 </body>
 </html> 

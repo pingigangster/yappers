@@ -1276,7 +1276,7 @@ io.on('connection', async (socket) => {
     console.log(`Nueva conexión: ${socket.id}`);
     socket.emit('connectionEstablished', { id: socket.id });
     
-    // Enviar salas disponibles al cliente cuando se conecta
+    // Enviar salas disponibles al cliente cuando se conecta - Sin filtrar roles aún
     try {
         const rooms = await roomController.getAllRooms();
         // Transformar para enviar solo información necesaria
@@ -1461,6 +1461,45 @@ io.on('connection', async (socket) => {
                     username: username,
                     id: socket.id
                 }]);
+            }
+            
+            // Enviar salas filtradas según los roles del usuario
+            try {
+                // Obtener las salas
+                const allRooms = await roomController.getAllRooms();
+                
+                // Obtener los roles del usuario
+                const user = await userController.getUserById(userId);
+                const userRoles = Array.isArray(user.roles) ? user.roles : [user.role || 'user'];
+                
+                // Filtrar salas a las que tiene acceso
+                const accessibleRooms = allRooms.filter(room => {
+                    // Si la sala no requiere rol específico, todos tienen acceso
+                    if (room.requiredRole === 'none') return true;
+                    
+                    // Si el usuario es admin, tiene acceso a todas las salas
+                    if (userRoles.includes('admin')) return true;
+                    
+                    // Si la sala requiere un rol específico, verificar si el usuario lo tiene
+                    return userRoles.includes(room.requiredRole);
+                });
+                
+                console.log(`Usuario ${username} tiene acceso a ${accessibleRooms.length} de ${allRooms.length} salas`);
+                
+                // Transformar para enviar solo información necesaria
+                const simplifiedRooms = accessibleRooms.map(room => ({
+                    id: room._id,
+                    name: room.name,
+                    slug: room.slug,
+                    description: room.description,
+                    requiredRole: room.requiredRole
+                }));
+                
+                // Enviar salas filtradas al usuario
+                socket.emit('roomsUpdated', simplifiedRooms);
+                console.log(`Lista filtrada de ${simplifiedRooms.length} salas enviada a ${username}`);
+            } catch (roomError) {
+                console.error(`Error al enviar salas filtradas a ${username}:`, roomError);
             }
             
             // 2. Obtener y enviar mensajes históricos
@@ -2186,6 +2225,56 @@ app.post('/api/admin/room/:roomId', verifyAdminToken, async (req, res) => {
     }
 });
 
+// Función para emitir salas actualizadas a todos los usuarios según sus roles
+async function emitUpdatedRoomsToClients() {
+    try {
+        // Obtener todas las salas
+        const allRooms = await roomController.getAllRooms();
+        
+        // Obtener todos los usuarios conectados
+        const connectedUsers = await userController.getConnectedUsers();
+        
+        // Para cada usuario conectado, enviar solo las salas a las que tiene acceso
+        for (const user of connectedUsers) {
+            if (!user.socketId) continue; // Omitir usuarios sin socketId
+            
+            // Obtener socket del usuario
+            const userSocket = io.sockets.sockets.get(user.socketId);
+            if (!userSocket) continue; // Omitir si el socket ya no existe
+            
+            // Obtener roles del usuario
+            const userRoles = Array.isArray(user.roles) ? user.roles : [user.role || 'user'];
+            
+            // Filtrar salas a las que tiene acceso
+            const accessibleRooms = allRooms.filter(room => {
+                // Si la sala no requiere rol específico, todos tienen acceso
+                if (room.requiredRole === 'none') return true;
+                
+                // Si el usuario es admin, tiene acceso a todas las salas
+                if (userRoles.includes('admin')) return true;
+                
+                // Si la sala requiere un rol específico, verificar si el usuario lo tiene
+                return userRoles.includes(room.requiredRole);
+            });
+            
+            // Transformar para enviar solo información necesaria
+            const simplifiedRooms = accessibleRooms.map(room => ({
+                id: room._id,
+                name: room.name,
+                slug: room.slug,
+                description: room.description,
+                requiredRole: room.requiredRole
+            }));
+            
+            // Enviar salas filtradas al usuario
+            userSocket.emit('roomsUpdated', simplifiedRooms);
+            console.log(`Lista filtrada de ${simplifiedRooms.length} salas enviada a ${user.username}`);
+        }
+    } catch (error) {
+        console.error('Error al enviar salas actualizadas a clientes:', error);
+    }
+}
+
 // Crear una nueva sala
 app.post('/api/admin/room', verifyAdminToken, async (req, res) => {
     try {
@@ -2199,16 +2288,8 @@ app.post('/api/admin/room', verifyAdminToken, async (req, res) => {
         const room = await roomController.createRoom(roomData);
         res.status(201).json({ success: true, room });
         
-        // Emitir evento para actualizar salas en todos los clientes
-        const allRooms = await roomController.getAllRooms();
-        const simplifiedRooms = allRooms.map(r => ({
-            id: r._id,
-            name: r.name,
-            slug: r.slug,
-            description: r.description,
-            requiredRole: r.requiredRole
-        }));
-        io.emit('roomsUpdated', simplifiedRooms);
+        // Emitir evento para actualizar salas en todos los clientes según sus roles
+        await emitUpdatedRoomsToClients();
         console.log(`Evento roomsUpdated emitido tras crear sala ${room.name}`);
     } catch (error) {
         console.error('Error al crear sala:', error);
@@ -2234,16 +2315,8 @@ app.put('/api/admin/room/:roomId', verifyAdminToken, async (req, res) => {
         
         res.json({ success: true, room: updatedRoom });
         
-        // Emitir evento para actualizar salas en todos los clientes
-        const allRooms = await roomController.getAllRooms();
-        const simplifiedRooms = allRooms.map(r => ({
-            id: r._id,
-            name: r.name,
-            slug: r.slug,
-            description: r.description,
-            requiredRole: r.requiredRole
-        }));
-        io.emit('roomsUpdated', simplifiedRooms);
+        // Emitir evento para actualizar salas en todos los clientes según sus roles
+        await emitUpdatedRoomsToClients();
         console.log(`Evento roomsUpdated emitido tras actualizar sala ${updatedRoom.name}`);
     } catch (error) {
         console.error('Error al actualizar sala:', error);
@@ -2259,16 +2332,8 @@ app.delete('/api/admin/room/:roomId', verifyAdminToken, async (req, res) => {
         
         res.json(result);
         
-        // Emitir evento para actualizar salas en todos los clientes
-        const allRooms = await roomController.getAllRooms();
-        const simplifiedRooms = allRooms.map(r => ({
-            id: r._id,
-            name: r.name,
-            slug: r.slug,
-            description: r.description,
-            requiredRole: r.requiredRole
-        }));
-        io.emit('roomsUpdated', simplifiedRooms);
+        // Emitir evento para actualizar salas en todos los clientes según sus roles
+        await emitUpdatedRoomsToClients();
         console.log(`Evento roomsUpdated emitido tras eliminar sala`);
     } catch (error) {
         console.error('Error al eliminar sala:', error);
@@ -2281,7 +2346,7 @@ app.post('/api/admin/rooms/initialize', verifyAdminToken, async (req, res) => {
     try {
         const result = await roomController.initDefaultRooms();
         
-        // Emitir evento para actualizar salas en todos los clientes
+        // Obtener todas las salas para incluirlas en la respuesta
         const allRooms = await roomController.getAllRooms();
         const simplifiedRooms = allRooms.map(r => ({
             id: r._id,
@@ -2297,7 +2362,8 @@ app.post('/api/admin/rooms/initialize', verifyAdminToken, async (req, res) => {
             rooms: simplifiedRooms 
         });
         
-        io.emit('roomsUpdated', simplifiedRooms);
+        // Emitir evento para actualizar salas en todos los clientes según sus roles
+        await emitUpdatedRoomsToClients();
         console.log(`Evento roomsUpdated emitido tras inicializar salas predeterminadas`);
     } catch (error) {
         console.error('Error al inicializar salas:', error);
@@ -2327,7 +2393,7 @@ app.post('/api/admin/rooms/reset-default-state', verifyAdminToken, async (req, r
             console.log('Sala General marcada como predeterminada');
         }
         
-        // Obtener todas las salas actualizadas
+        // Obtener todas las salas actualizadas para incluirlas en la respuesta
         const allRooms = await roomController.getAllRooms();
         const simplifiedRooms = allRooms.map(r => ({
             id: r._id,
@@ -2344,8 +2410,8 @@ app.post('/api/admin/rooms/reset-default-state', verifyAdminToken, async (req, r
             rooms: simplifiedRooms
         });
         
-        // Notificar a los clientes
-        io.emit('roomsUpdated', simplifiedRooms);
+        // Emitir evento para actualizar salas en todos los clientes según sus roles
+        await emitUpdatedRoomsToClients();
         console.log('Evento roomsUpdated emitido tras actualizar estado predeterminado');
     } catch (error) {
         console.error('Error al actualizar estado de salas:', error);

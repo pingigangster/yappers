@@ -1121,7 +1121,7 @@ const roomController = {
                 throw new Error('No se puede eliminar la sala General');
             }
             
-            // Para el resto de salas, permitir eliminar independientemente del estado isDefault
+            // Eliminar la sala
             await Room.findByIdAndDelete(roomId);
             return { success: true, message: 'Sala eliminada correctamente' };
         } catch (error) {
@@ -1147,43 +1147,25 @@ const roomController = {
         }
     },
     
-    // Inicializar salas predeterminadas
+    // Inicializar sala General
     async initDefaultRooms() {
         try {
-            const defaultRooms = [
-                {
+            // Verificar si la sala General existe
+            const existingRoom = await Room.findOne({ slug: 'general' });
+            if (!existingRoom) {
+                // Crear la sala General si no existe
+                await this.createRoom({
                     name: 'General',
                     slug: 'general',
                     description: 'Chat general para todos los usuarios',
-                    requiredRole: 'none',
-                    isPrivate: false,
-                    isDefault: true
-                }
-                // Las demás salas predeterminadas han sido eliminadas
-            ];
-            
-            // Crear salas si no existen
-            for (const roomData of defaultRooms) {
-                const existingRoom = await Room.findOne({ slug: roomData.slug });
-                if (!existingRoom) {
-                    await this.createRoom(roomData);
-                    console.log(`Sala predeterminada creada: ${roomData.name}`);
-                } else {
-                    // Actualizar el estado isDefault para asegurar que coincida con la configuración
-                    if (existingRoom.isDefault !== roomData.isDefault) {
-                        await Room.findByIdAndUpdate(
-                            existingRoom._id,
-                            { isDefault: roomData.isDefault },
-                            { new: true }
-                        );
-                        console.log(`Estado 'isDefault' actualizado para ${roomData.name}: ${roomData.isDefault}`);
-                    }
-                }
+                    requiredRole: 'none'
+                });
+                console.log('Sala General creada correctamente');
             }
             
-            return { success: true, message: 'Salas predeterminadas inicializadas correctamente' };
+            return { success: true, message: 'Sala General inicializada correctamente' };
         } catch (error) {
-            console.error(`Error al inicializar salas predeterminadas: ${error}`);
+            console.error(`Error al inicializar sala General: ${error}`);
             throw error;
         }
     }

@@ -32,21 +32,6 @@ const RoomSchema = new mongoose.Schema({
         type: String,
         default: 'none' // 'none' significa que todos pueden acceder
     },
-    // Si es privada, solo usuarios específicos pueden acceder
-    isPrivate: {
-        type: Boolean,
-        default: false
-    },
-    // Lista de IDs de usuarios con acceso si es privada
-    allowedUsers: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    }],
-    // Si es una sala predeterminada, no se puede eliminar
-    isDefault: {
-        type: Boolean,
-        default: false
-    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -65,8 +50,8 @@ RoomSchema.pre('save', function(next) {
 
 // Método para comprobar si un usuario tiene acceso a la sala
 RoomSchema.methods.hasAccess = function(user) {
-    // Si la sala no es privada y no requiere rol específico, todos tienen acceso
-    if (!this.isPrivate && this.requiredRole === 'none') {
+    // Si no requiere rol específico, todos tienen acceso
+    if (this.requiredRole === 'none') {
         return true;
     }
     
@@ -83,19 +68,11 @@ RoomSchema.methods.hasAccess = function(user) {
         return false;
     }
     
-    // Si es privada, verificar que el usuario esté en la lista de permitidos
-    if (this.isPrivate) {
-        return this.allowedUsers.some(userId => 
-            userId.toString() === user._id.toString()
-        );
-    }
-    
     return true;
 };
 
 // Creación de índices para mejorar rendimiento
 RoomSchema.index({ name: 1 }, { unique: true });
 RoomSchema.index({ slug: 1 }, { unique: true });
-RoomSchema.index({ isDefault: 1 });
 
 module.exports = mongoose.model('Room', RoomSchema); 
