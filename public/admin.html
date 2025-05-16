@@ -440,6 +440,170 @@
             background-color: rgba(189, 195, 199, 0.2);
             color: #7f8c8d;
         }
+
+        .role-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .role-user {
+            background-color: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+        }
+        
+        .role-admin {
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+        
+        .role-moderator {
+            background-color: rgba(230, 126, 34, 0.2);
+            color: #e67e22;
+        }
+        
+        .role-support {
+            background-color: rgba(46, 204, 113, 0.2);
+            color: #27ae60;
+        }
+        
+        .role-list {
+            padding-left: 20px;
+            margin-top: 10px;
+        }
+        
+        .role-list li {
+            margin-bottom: 8px;
+        }
+        
+        .role-description {
+            background-color: rgba(52, 152, 219, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .roles-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        /* Estilos mejorados para la gestión de roles */
+        .role-btn {
+            padding: 8px 15px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .role-btn.selected {
+            border-color: currentColor;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .role-btn[data-role="user"] {
+            background-color: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+        }
+        
+        .role-btn[data-role="user"].selected {
+            background-color: rgba(52, 152, 219, 0.4);
+        }
+        
+        .role-btn[data-role="admin"] {
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+        
+        .role-btn[data-role="admin"].selected {
+            background-color: rgba(231, 76, 60, 0.4);
+        }
+        
+        .custom-role-btn.selected {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+        
+        .loading-roles {
+            font-style: italic;
+            color: #95a5a6;
+            padding: 10px 0;
+        }
+        
+        /* Estilos para roles personalizados */
+        .custom-role-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            background-color: rgba(var(--role-bg-color, 52, 152, 219), 0.2);
+            color: var(--role-text-color, #3498db);
+        }
+        
+        /* Estilos para selector de roles personalizado */
+        .custom-role-btn {
+            padding: 8px 15px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            background-color: #f0f0f0;
+            color: #555;
+            border-color: rgba(var(--role-border-color, 52, 152, 219), 0.5);
+        }
+        
+        .custom-role-btn.selected {
+            background-color: rgba(var(--role-bg-color, 52, 152, 219), 0.2);
+            color: var(--role-text-color, #3498db);
+            border-color: var(--role-border-color, #3498db);
+        }
+        
+        /* Estilos para el selector de color */
+        input[type="color"] {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        
+        input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+        
+        .color-preview {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
@@ -448,13 +612,13 @@
     <!-- Login Panel -->
     <div id="login-panel">
         <h2>Panel de Administración</h2>
-                <form id="login-form">
+        <form id="login-form" onsubmit="return false;">
             <div class="form-group">
-                        <label for="password">Contraseña de Administrador</label>
+                <label for="password">Contraseña de Administrador</label>
                 <input type="password" id="password" name="password" required>
-                    </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Iniciar Sesión</button>
-                </form>
+            </div>
+            <button id="login-btn" type="button" class="btn btn-primary" style="width: 100%;">Iniciar Sesión</button>
+        </form>
     </div>
     
     <!-- Admin Panel -->
@@ -543,6 +707,99 @@
                         </div>
                     </div>
         
+        <!-- Rooms Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fas fa-comments"></i> Gestión de Salas</h2>
+                <button id="refresh-rooms" class="btn btn-primary btn-sm"><i class="fas fa-sync-alt"></i> Actualizar</button>
+            </div>
+            <div class="card-body">
+                <div class="actions" style="margin-bottom: 20px;">
+                    <button id="add-room-btn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Añadir Sala
+                    </button>
+                    <button id="init-default-rooms-btn" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> Reiniciar Salas Predeterminadas
+                    </button>
+                    <button id="reset-default-state-btn" class="btn btn-warning">
+                        <i class="fas fa-exclamation-triangle"></i> Arreglar Estado Predeterminado
+                    </button>
+                    <button id="clean-rooms-btn" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Eliminar Todas (Excepto General)
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="rooms-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Slug</th>
+                                <th>Descripción</th>
+                                <th>Rol Requerido</th>
+                                <th>Privada</th>
+                                <th>Predeterminada</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Room rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- User Roles Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fas fa-user-shield"></i> Gestión de Roles</h2>
+            </div>
+            <div class="card-body">
+                <p class="mb-4">Aquí puedes gestionar los roles de los usuarios. Los roles determinan qué salas pueden acceder y qué acciones pueden realizar.</p>
+                <div class="role-description">
+                    <h4>Roles Disponibles</h4>
+                    <ul class="role-list">
+                        <li><strong>user</strong>: Usuario normal con acceso básico</li>
+                        <li><strong>admin</strong>: Administrador con acceso total al sistema</li>
+                    </ul>
+                </div>
+                <p class="mt-4">Para cambiar el rol de un usuario, utiliza la opción "Cambiar Rol" en la tabla de usuarios.</p>
+            </div>
+        </div>
+        
+        <!-- Custom Roles Management Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fas fa-user-tag"></i> Roles Personalizados</h2>
+                <button id="refresh-roles" class="btn btn-primary btn-sm"><i class="fas fa-sync-alt"></i> Actualizar</button>
+            </div>
+            <div class="card-body">
+                <div class="actions" style="margin-bottom: 20px;">
+                    <button id="add-role-btn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Crear Nuevo Rol
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="roles-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Identificador</th>
+                                <th>Descripción</th>
+                                <th>Predeterminado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Role rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
         <!-- Reset Card -->
         <div class="card">
             <div class="card-header">
@@ -575,28 +832,160 @@
     <!-- Change Password Modal -->
     <div id="change-password-modal" class="modal">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeModal('change-password-modal')">&times;</span>
             <h3>Cambiar Contraseña</h3>
-            <input type="hidden" id="change-password-user-id">
-            <p>Usuario: <strong id="change-password-username"></strong></p>
+            <p>Cambiar contraseña para: <span id="change-password-username">Usuario</span></p>
+            <input type="hidden" id="change-password-user-id" value="">
             <div class="form-group">
-                <label for="new-password">Nueva Contraseña:</label>
-                <input type="password" id="new-password" required minlength="6">
-                <small class="form-text text-muted">Mínimo 6 caracteres.</small>
+                <label for="new-password">Nueva Contraseña</label>
+                <input type="password" id="new-password" name="new-password" required>
             </div>
             <div class="form-group">
-                <label for="confirm-new-password">Confirmar Nueva Contraseña:</label>
-                <input type="password" id="confirm-new-password" required minlength="6">
+                <label for="confirm-new-password">Confirmar Nueva Contraseña</label>
+                <input type="password" id="confirm-new-password" name="confirm-new-password" required>
             </div>
-            <div id="change-password-error" class="alert alert-danger" style="display:none; margin-bottom: 15px;"></div>
+            <div id="change-password-error" style="color: red; display: none; margin-bottom: 15px;"></div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('change-password-modal')">Cancelar</button>
-                <button id="confirm-change-password-btn" class="btn btn-primary">Guardar Contraseña</button>
+                <button id="confirm-change-password-btn" class="btn btn-primary">Guardar</button>
+                <button onclick="closeModal('change-password-modal')" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para Añadir/Editar Sala -->
+    <div id="room-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="room-modal-title">Añadir Nueva Sala</h3>
+            <input type="hidden" id="room-id" value="">
+            <div class="form-group">
+                <label for="room-name">Nombre de Sala</label>
+                <input type="text" id="room-name" name="room-name" required>
+            </div>
+            <div class="form-group">
+                <label for="room-slug">Slug (identificador único)</label>
+                <input type="text" id="room-slug" name="room-slug" placeholder="Generado automáticamente si se deja vacío">
+                <small class="form-text text-muted">Solo letras, números y guiones. Se usará en la URL.</small>
+            </div>
+            <div class="form-group">
+                <label for="room-description">Descripción</label>
+                <textarea id="room-description" name="room-description" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Rol Requerido (haz clic para seleccionar uno):</label>
+                <div id="room-roles-container" class="roles-selector" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; margin-bottom: 15px;">
+                    <button type="button" class="role-btn" data-role="none" style="background-color: rgba(149, 165, 166, 0.2); color: #95a5a6; border: 2px solid transparent; border-radius: 30px; padding: 8px 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Ninguno (Todos)</button>
+                    <button type="button" class="role-btn" data-role="user" style="background-color: rgba(52, 152, 219, 0.2); color: #3498db; border: 2px solid transparent; border-radius: 30px; padding: 8px 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Usuario</button>
+                    <button type="button" class="role-btn" data-role="admin" style="background-color: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 2px solid transparent; border-radius: 30px; padding: 8px 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Administrador</button>
+                </div>
+                <div id="room-custom-roles-container" class="roles-selector" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+                    <div class="roles-loading">Cargando roles personalizados...</div>
+                </div>
+                <input type="hidden" id="room-required-role" name="room-required-role" value="none">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="room-is-private" name="room-is-private">
+                    Sala Privada (Solo usuarios específicos)
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="room-is-default" name="room-is-default">
+                    Sala Predeterminada (No se puede eliminar)
+                </label>
+            </div>
+            <div id="room-error" style="color: red; display: none; margin-bottom: 15px;"></div>
+            <div class="modal-footer">
+                <button id="save-room-btn" class="btn btn-primary">Guardar</button>
+                <button onclick="closeModal('room-modal')" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    
+    
+    
+        <!-- Modal para gestionar múltiples roles -->
+    <div id="manage-roles-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Gestionar Roles</h3>
+                <span class="close-modal" data-modal="manage-roles-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Gestionar los roles de <span id="manage-roles-username" class="highlight"></span></p>
+                <input type="hidden" id="manage-roles-user-id">
+                
+                <div class="form-group">
+                    <label>Roles del Sistema (haz clic para seleccionar/deseleccionar):</label>
+                    <div id="system-roles-container" class="roles-selector" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+                        <button type="button" class="role-btn" data-role="user" style="background-color: rgba(52, 152, 219, 0.2); color: #3498db; border: 2px solid transparent; border-radius: 30px; padding: 8px 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Usuario</button>
+                        <button type="button" class="role-btn" data-role="admin" style="background-color: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 2px solid transparent; border-radius: 30px; padding: 8px 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Administrador</button>
+                    </div>
+                    
+                    <label>Roles Personalizados:</label>
+                    <div id="roles-container" class="roles-selector" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <div class="roles-loading">Cargando roles personalizados...</div>
+                    </div>
+                </div>
+                
+                <div id="manage-roles-error" class="error-message" style="color: red; margin-top: 10px; display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-roles-btn">Cancelar</button>
+                <button class="btn btn-primary" id="save-roles-btn">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para Añadir/Editar Rol Personalizado -->
+    <div id="role-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="role-modal-title">Crear Nuevo Rol</h3>
+            <input type="hidden" id="role-id" value="">
+            <div class="form-group">
+                <label for="role-name">Nombre del Rol</label>
+                <input type="text" id="role-name" name="role-name" required>
+            </div>
+            <div class="form-group">
+                <label for="role-identifier">Identificador</label>
+                <input type="text" id="role-identifier" name="role-identifier" placeholder="Generado automáticamente si se deja vacío">
+                <small class="form-text text-muted">Solo letras minúsculas, números y guiones. Se usará como identificador interno.</small>
+            </div>
+            <div class="form-group">
+                <label for="role-description">Descripción</label>
+                <textarea id="role-description" name="role-description" rows="3" style="resize: none;"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="role-color">Color</label>
+                <input type="color" id="role-color" name="role-color" value="#3498db">
+                <small class="form-text text-muted">Color para mostrar el rol en la interfaz</small>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="role-is-default" name="role-is-default">
+                    Rol Predeterminado (No se puede eliminar)
+                </label>
+            </div>
+            <div id="role-error" style="color: red; display: none; margin-bottom: 15px;"></div>
+            <div class="modal-footer">
+                <button id="save-role-btn" class="btn btn-primary">Guardar</button>
+                <button onclick="closeModal('role-modal')" class="btn btn-secondary">Cancelar</button>
             </div>
         </div>
     </div>
     
     <script>
+        // Escape HTML para evitar XSS
+        function escapeHTML(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return unsafe
+                .toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        
         // Variables globales
         let adminPassword = '';
         const API_BASE_URL = window.location.origin;
@@ -641,8 +1030,29 @@
         const changePasswordErrorDiv = document.getElementById('change-password-error');
         const confirmChangePasswordBtn = document.getElementById('confirm-change-password-btn');
         
-        // Estado de la aplicación
-        // let loadingState = false; // No parece usarse globalmente
+        // Referencias a elementos DOM para gestión de múltiples roles
+        const manageRolesModal = document.getElementById('manage-roles-modal');
+        const manageRolesUsernameSpan = document.getElementById('manage-roles-username');
+        const manageRolesUserIdInput = document.getElementById('manage-roles-user-id');
+        const rolesContainer = document.getElementById('roles-container');
+        const cancelRolesBtn = document.getElementById('cancel-roles-btn');
+        const saveRolesBtn = document.getElementById('save-roles-btn');
+        const manageRolesErrorDiv = document.getElementById('manage-roles-error');
+        
+        // Referencias a elementos DOM para roles personalizados
+        const rolesTable = document.getElementById('roles-table');
+        const refreshRolesBtn = document.getElementById('refresh-roles');
+        const addRoleBtn = document.getElementById('add-role-btn');
+        const roleModal = document.getElementById('role-modal');
+        const roleModalTitle = document.getElementById('role-modal-title');
+        const roleIdInput = document.getElementById('role-id');
+        const roleNameInput = document.getElementById('role-name');
+        const roleIdentifierInput = document.getElementById('role-identifier');
+        const roleDescriptionInput = document.getElementById('role-description');
+        const roleColorInput = document.getElementById('role-color');
+        const roleIsDefaultCheckbox = document.getElementById('role-is-default');
+        const saveRoleBtn = document.getElementById('save-role-btn');
+        const roleErrorDiv = document.getElementById('role-error');
         
         // Verificar si hay una sesión guardada al cargar la página
         document.addEventListener('DOMContentLoaded', () => {
@@ -660,9 +1070,20 @@
             }
         });
 
-        function loadInitialData(){
-            loadStats();
-            loadUsers();
+        // Cargar datos iniciales
+        async function loadInitialData() {
+            try {
+                await Promise.all([
+                    loadStats(),
+                    loadUsers(),
+                    loadRooms(), // Añadir carga de salas
+                    loadCustomRoles() // Añadir carga de roles personalizados
+                ]);
+                
+                showAlert('Datos actualizados correctamente', 'success');
+            } catch (error) {
+                showAlert(`Error al cargar datos: ${error.message}`, 'danger');
+            }
         }
         
         function logout() {
@@ -745,18 +1166,25 @@
             }
         }
         
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        // Función para manejar el proceso de inicio de sesión
+        async function handleLogin() {
+            console.log("Intentando iniciar sesión");
+            
             const passwordInput = document.getElementById('password');
             const password = passwordInput.value;
+            
             if (!password) {
                 showAlert('Por favor, introduce la contraseña', 'danger');
                 return;
             }
+            
             try {
                 setLoading(loginForm, true);
+                console.log("Verificando contraseña...");
+                
                 // Simulación de login, ya que la API de login real no está siendo usada para admin
                 if (password === 'patatata123') { // Usar la contraseña de admin definida
+                    console.log("Contraseña correcta");
                     adminPassword = password;
                     localStorage.setItem('adminSession', adminPassword);
                     loginPanel.style.display = 'none';
@@ -764,12 +1192,25 @@
                     loadInitialData();
                     showAlert('Has iniciado sesión correctamente', 'success');
                 } else {
+                    console.log("Contraseña incorrecta");
                     showAlert('Contraseña incorrecta', 'danger');
                 }
             } catch (error) {
+                console.error("Error en el login:", error);
                 showAlert(`Error al iniciar sesión: ${error.message}`, 'danger');
             } finally {
                 setLoading(loginForm, false);
+            }
+        }
+        
+        // Manejar el inicio de sesión con el botón
+        document.getElementById('login-btn').addEventListener('click', handleLogin);
+        
+        // Manejar la pulsación de Enter en el campo de contraseña
+        document.getElementById('password').addEventListener('keyup', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                handleLogin();
             }
         });
         
@@ -811,38 +1252,103 @@
         }
         
         async function loadUsers() {
-            const usersTableBody = usersTable.getElementsByTagName('tbody')[0];
             const usersCardBody = usersTable.closest('.card-body');
-            usersTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Cargando usuarios...</td></tr>`;
+            const usersTableBody = usersTable.querySelector('tbody');
+            
             try {
                 setLoading(usersCardBody, true);
                 refreshUsersBtn.classList.add('loading');
+                
                 const response = await fetchAPI('/api/admin/users', {
-                    method: 'POST', body: JSON.stringify({ password: adminPassword })
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
                 });
-
-                usersTableBody.innerHTML = ''; // Limpiar antes de añadir filas
+                
                 if (response.success && response.users) {
                     if (response.users.length === 0) {
-                        usersTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">No hay usuarios registrados.</td></tr>`;
+                        usersTableBody.innerHTML = '<tr><td colspan="7" class="empty-message">No hay usuarios registrados.</td></tr>';
                     } else {
+                        usersTableBody.innerHTML = '';
                         response.users.forEach(user => {
-                            const row = usersTableBody.insertRow();
-                            row.innerHTML = `
-                                <td>${user._id}</td>
-                                <td>${user.username || 'N/A'}</td>
-                                <td>${user.email || 'N/A'}</td>
-                                <td><span class="badge badge-${user.role === 'admin' ? 'danger' : 'primary'}">${user.role || 'user'}</span></td>
-                                <td><span class="status-dot ${user.isActive ? 'active' : 'inactive'}" title="${user.isActive ? 'Conectado' : 'Desconectado'}"></span> ${user.socketId ? 'Sí' : 'No'}</td>
-                                <td>${formatDate(user.lastActive)}</td>
+                            const formattedLastActive = user.lastActive ? 
+                                new Date(user.lastActive).toLocaleString() : 'Nunca';
+                            
+                            // Formatear lista de roles y filtrar los eliminados
+                            const filteredRoles = (user.roles || [user.role || 'user']).filter(role => 
+                                !['moderator', 'support'].includes(role)
+                            );
+                            // Si al filtrar no queda ningún rol, asignar 'user' por defecto
+                            if (filteredRoles.length === 0) filteredRoles.push('user');
+                            
+                            // Generar HTML para los roles
+                            let rolesHTML = '';
+                            
+                            // Primero buscaremos los roles personalizados para mostrarlos con el color correcto
+                            fetchAPI('/api/admin/custom-roles', {
+                                method: 'POST',
+                                body: JSON.stringify({ password: adminPassword })
+                            })
+                            .then(response => {
+                                if (response.success && response.roles) {
+                                    const allRoles = response.roles;
+                                    
+                                    // Crear HTML para los roles
+                                    rolesHTML = filteredRoles.map(roleId => {
+                                        const roleInfo = allRoles.find(r => r.identifier === roleId);
+                                        if (roleInfo) {
+                                            // Si es un rol personalizado, usar su color específico
+                                            return `<span class="role-badge" style="background-color: rgba(${hexToRgb(roleInfo.color || '#3498db')}, 0.2); 
+                                                color: ${roleInfo.color}">${roleInfo.name}</span>`;
+                                        } else {
+                                            // Si no se encuentra (raro), usar el estilo por defecto
+                                            return `<span class="role-badge role-${roleId}">${roleId}</span>`;
+                                        }
+                                    }).join(' ');
+                                    
+                                    // Actualizar el contenido del TD con los roles
+                                    const userRow = document.querySelector(`tr[data-user-id="${user._id}"]`);
+                                    if (userRow) {
+                                        const rolesTd = userRow.querySelector('.user-roles-cell');
+                                        if (rolesTd) rolesTd.innerHTML = rolesHTML;
+                                    }
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error al cargar roles para visualización:', error);
+                            });
+                            
+                            // Mostrar texto "Cargando..." mientras se obtienen los roles
+                            rolesHTML = '<span class="loading-roles">Cargando roles...</span>';
+                            
+                            // Convertir roles a JSON para usar en data-roles
+                            const rolesJSON = JSON.stringify(user.roles || [user.role || 'user']);
+                            
+                                                        usersTableBody.innerHTML += `
+                                <tr data-user-id="${user._id}">
+                                    <td>${user._id.substring(0, 8)}...</td>
+                                    <td>${escapeHTML(user.username)}</td>
+                                    <td>${escapeHTML(user.email || '')}</td>
+                                    <td class="user-roles-cell">
+                                        ${rolesHTML}
+                                    </td>
+                                    <td>
+                                        <span class="status-badge ${user.isActive ? 'status-connected' : 'status-disconnected'}">
+                                            ${user.isActive ? 'Conectado' : 'Desconectado'}
+                                        </span>
+                                    </td>
+                                    <td>${formattedLastActive}</td>
                                 <td class="actions">
-                                    <button class="icon-btn change-password-btn" title="Cambiar Contraseña" data-user-id="${user._id}" data-username="${user.username}">
-                                        <i class="fas fa-key"></i>
-                                    </button>
-                                    <button class="icon-btn delete-btn" title="Eliminar Usuario" data-user-id="${user._id}" data-username="${user.username}">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </td>
+                                        <button class="icon-btn manage-roles-btn" title="Gestionar Roles" data-user-id="${user._id}" data-username="${user.username}" data-roles='${rolesJSON}'>
+                                            <i class="fas fa-users-cog"></i>
+                                        </button>
+                                        <button class="icon-btn change-password-btn" title="Cambiar Contraseña" data-user-id="${user._id}" data-username="${user.username}">
+                                            <i class="fas fa-key"></i>
+                                        </button>
+                                        <button class="icon-btn delete-btn" title="Eliminar Usuario" data-user-id="${user._id}" data-username="${user.username}">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
                             `;
                         });
                     }
@@ -965,32 +1471,62 @@
             if (modalToClose) {
                 modalToClose.style.display = 'none';
             }
-             // Limpiar campos específicos del modal de cambio de contraseña si es ese el que se cierra
+            
+            // Limpiar campos específicos según el modal
             if (modalId === 'change-password-modal') {
                 newPasswordInput.value = '';
                 confirmNewPasswordInput.value = '';
                 changePasswordErrorDiv.style.display = 'none';
                 changePasswordErrorDiv.textContent = '';
+            } else if (modalId === 'manage-roles-modal') {
+                manageRolesErrorDiv.style.display = 'none';
+                manageRolesErrorDiv.textContent = '';
+                
+                // Reiniciar el estado de los botones de roles del sistema
+                const systemRolesContainer = document.getElementById('system-roles-container');
+                const systemRoleBtns = systemRolesContainer.querySelectorAll('.role-btn');
+                
+                systemRoleBtns.forEach(btn => {
+                    // Eliminar clase de selección
+                    btn.classList.remove('selected');
+                    
+                    // Restablecer estilos visuales
+                    const role = btn.dataset.role;
+                    let color = role === 'user' ? '#3498db' : 
+                                role === 'admin' ? '#e74c3c' : '#3498db';
+                    
+                    btn.style.backgroundColor = `rgba(${hexToRgb(color)}, 0.2)`;
+                    btn.style.border = '2px solid transparent';
+                });
+                
+                // Limpiar el contenedor de roles personalizados para evitar duplicación
+                rolesContainer.innerHTML = '';
             }
         }
-        
+
+        // Asignar manejadores de eventos para botones de cerrar modales
+        document.querySelectorAll('.close-modal').forEach(button => {
+            button.addEventListener('click', function() {
+                const modalId = this.getAttribute('data-modal');
+                closeModal(modalId);
+            });
+        });
+
+        // También asignar handlers para botones que tengan data-modal
+        document.querySelectorAll('[data-modal]').forEach(button => {
+            if (!button.classList.contains('close-modal')) {
+                button.addEventListener('click', function() {
+                    const modalId = this.getAttribute('data-modal');
+                    closeModal(modalId);
+                });
+            }
+        });
+
         modalConfirmBtn.addEventListener('click', () => {
             if (typeof currentConfirmAction === 'function') {
                 currentConfirmAction();
             }
             closeModal('confirmation-modal');
-        });
-        modalCancelBtn.addEventListener('click', () => closeModal('confirmation-modal'));
-        
-        window.addEventListener('click', (event) => {
-            if (event.target === confirmationModal) closeModal('confirmation-modal');
-            if (event.target === changePasswordModal) closeModal('change-password-modal');
-        });
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                if (confirmationModal.style.display === 'flex') closeModal('confirmation-modal');
-                if (changePasswordModal.style.display === 'flex') closeModal('change-password-modal');
-            }
         });
 
         // Acciones de Administración (Eliminar todo, etc.)
@@ -1031,6 +1567,1222 @@
         refreshStatsBtn.addEventListener('click', loadStats);
         refreshUsersBtn.addEventListener('click', loadUsers);
 
+        // --- GESTIÓN DE SALAS ---
+        
+        // Referencias a elementos DOM para salas
+        const roomsTable = document.getElementById('rooms-table');
+        const refreshRoomsBtn = document.getElementById('refresh-rooms');
+        const addRoomBtn = document.getElementById('add-room-btn');
+        const initDefaultRoomsBtn = document.getElementById('init-default-rooms-btn');
+        const roomModal = document.getElementById('room-modal');
+        const roomModalTitle = document.getElementById('room-modal-title');
+        const roomIdInput = document.getElementById('room-id');
+        const roomNameInput = document.getElementById('room-name');
+        const roomSlugInput = document.getElementById('room-slug');
+        const roomDescriptionInput = document.getElementById('room-description');
+        const roomRequiredRoleSelect = document.getElementById('room-required-role');
+        const roomIsPrivateCheckbox = document.getElementById('room-is-private');
+        const roomIsDefaultCheckbox = document.getElementById('room-is-default');
+        const saveRoomBtn = document.getElementById('save-room-btn');
+        const roomErrorDiv = document.getElementById('room-error');
+        
+        // Cargar salas al inicio
+        async function loadRooms() {
+            const roomsCardBody = roomsTable.closest('.card-body');
+            const roomsTableBody = roomsTable.querySelector('tbody');
+            
+            try {
+                setLoading(roomsCardBody, true);
+                refreshRoomsBtn.classList.add('loading');
+                
+                // Primero inicializamos las salas predeterminadas y luego obtenemos todas
+                await fetchAPI('/api/admin/rooms/initialize', {
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                // Ahora obtenemos las salas
+                const response = await fetchAPI('/api/admin/rooms', {
+                    method: 'POST',  // Convertimos a POST para poder enviar contraseña en body
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (response.success && response.rooms) {
+                    if (response.rooms.length === 0) {
+                        roomsTableBody.innerHTML = '<tr><td colspan="8" class="empty-message">No hay salas disponibles.</td></tr>';
+                    } else {
+                        roomsTableBody.innerHTML = '';
+                        response.rooms.forEach(room => {
+                            roomsTableBody.innerHTML += `
+                                <tr>
+                                    <td>${room._id.substring(0, 8)}...</td>
+                                    <td>${escapeHTML(room.name)}</td>
+                                    <td>${escapeHTML(room.slug)}</td>
+                                    <td>${escapeHTML(room.description || '')}</td>
+                                    <td>${escapeHTML(room.requiredRole)}</td>
+                                    <td>${room.isPrivate ? 'Sí' : 'No'}</td>
+                                    <td>${room.isDefault ? 'Sí' : 'No'}</td>
+                                    <td class="actions">
+                                        <button class="icon-btn edit-room-btn" title="Editar Sala" data-room-id="${room._id}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="icon-btn delete-room-btn ${room.slug === 'general' ? 'disabled' : ''}" 
+                                            title="${room.slug === 'general' ? 'No se puede eliminar la sala General' : 'Eliminar Sala'}" 
+                                            data-room-id="${room._id}" 
+                                            data-room-name="${escapeHTML(room.name)}"
+                                            ${room.slug === 'general' ? 'disabled' : ''}>
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    }
+                } else {
+                    roomsTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Error al cargar salas: ${response.message || 'Desconocido'}</td></tr>`;
+                }
+                
+                // Añadir event listeners después de crear las filas
+                attachRoomActionListeners();
+            } catch (error) {
+                showAlert(`Error al cargar salas: ${error.message}`, 'danger');
+                roomsTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Error crítico al cargar salas.</td></tr>`;
+            } finally {
+                setLoading(roomsCardBody, false);
+                refreshRoomsBtn.classList.remove('loading');
+            }
+        }
+        
+        // Añadir event listeners para acciones de sala
+        function attachRoomActionListeners() {
+            document.querySelectorAll('.edit-room-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const roomId = this.dataset.roomId;
+                    editRoom(roomId);
+                });
+            });
+            
+            document.querySelectorAll('.delete-room-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    if (!this.hasAttribute('disabled')) {
+                        const roomId = this.dataset.roomId;
+                        const roomName = this.dataset.roomName;
+                        confirmDeleteRoom(roomId, roomName);
+                    }
+                });
+            });
+        }
+        
+        // Abrir modal para añadir una nueva sala
+        addRoomBtn.addEventListener('click', () => {
+            roomModalTitle.textContent = 'Añadir Nueva Sala';
+            roomIdInput.value = '';
+            roomNameInput.value = '';
+            roomSlugInput.value = '';
+            roomDescriptionInput.value = '';
+            
+            // Establecer el valor predeterminado del rol requerido
+            const roomRequiredRoleInput = document.getElementById('room-required-role');
+            roomRequiredRoleInput.value = 'none';
+            
+            roomIsPrivateCheckbox.checked = false;
+            roomIsDefaultCheckbox.checked = false;
+            roomErrorDiv.style.display = 'none';
+            roomErrorDiv.textContent = '';
+            
+            // Cargar roles personalizados para el selector visual
+            loadRolesForSelect();
+            
+            roomModal.style.display = 'flex';
+            roomNameInput.focus();
+        });
+        
+        // Abrir modal para editar una sala existente
+        async function editRoom(roomId) {
+            try {
+                // Usamos POST en lugar de PUT para obtener los detalles de la sala
+                const response = await fetchAPI(`/api/admin/room/${roomId}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (response.success && response.room) {
+                    const room = response.room;
+                    roomModalTitle.textContent = 'Editar Sala';
+                    roomIdInput.value = room._id;
+                    roomNameInput.value = room.name;
+                    roomSlugInput.value = room.slug;
+                    roomDescriptionInput.value = room.description || '';
+                    
+                    // Establecer el valor del rol requerido
+                    const roomRequiredRoleInput = document.getElementById('room-required-role');
+                    roomRequiredRoleInput.value = room.requiredRole || 'none';
+                    
+                    // Cargar roles personalizados (ahora con la interfaz visual)
+                    await loadRolesForSelect();
+                    
+                    roomIsPrivateCheckbox.checked = room.isPrivate;
+                    roomIsDefaultCheckbox.checked = room.isDefault;
+                    roomErrorDiv.style.display = 'none';
+                    roomErrorDiv.textContent = '';
+                    roomModal.style.display = 'flex';
+                    roomNameInput.focus();
+                } else {
+                    showAlert(`Error al cargar sala: ${response.message}`, 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error al cargar sala: ${error.message}`, 'danger');
+            }
+        }
+        
+        // Función para cargar roles en el selector visual de requisito de rol
+        async function loadRolesForSelect() {
+            try {
+                const roomRequiredRoleInput = document.getElementById('room-required-role');
+                const roomRolesContainer = document.getElementById('room-roles-container');
+                const roomCustomRolesContainer = document.getElementById('room-custom-roles-container');
+                
+                // Obtener el valor actual del rol requerido
+                const currentRequiredRole = roomRequiredRoleInput.value;
+                
+                // Configurar botones de roles del sistema
+                const systemRoleBtns = roomRolesContainer.querySelectorAll('.role-btn');
+                
+                // Resetear todas las selecciones
+                systemRoleBtns.forEach(btn => {
+                    btn.classList.remove('selected');
+                    
+                    // Si este es el rol actual, marcarlo como seleccionado
+                    if (btn.dataset.role === currentRequiredRole) {
+                        btn.classList.add('selected');
+                        updateRoleButtonStyle(btn, true);
+                    }
+                    
+                    // Asegurarse de que el evento click está asignado (solo una vez)
+                    btn.removeEventListener('click', handleRoomRoleSelection);
+                    btn.addEventListener('click', handleRoomRoleSelection);
+                });
+                
+                // Limpiar el contenedor de roles personalizados
+                roomCustomRolesContainer.innerHTML = '<div class="roles-loading">Cargando roles personalizados...</div>';
+                
+                // Obtener roles personalizados
+                const response = await fetchAPI('/api/admin/custom-roles', {
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (response.success && response.roles) {
+                    // Filtrar roles que no sean los predefinidos
+                    const customRoles = response.roles.filter(role => 
+                        !['user', 'admin', 'none'].includes(role.identifier) &&
+                        !role._id.startsWith('system-')
+                    );
+                    
+                    // Limpiar el contenedor de roles personalizados
+                    roomCustomRolesContainer.innerHTML = '';
+                    
+                    if (customRoles.length === 0) {
+                        // Mostrar mensaje si no hay roles personalizados
+                        roomCustomRolesContainer.innerHTML = '<p style="color: #777; font-style: italic; margin: 0;">No hay roles personalizados disponibles</p>';
+                    } else {
+                        // Crear grid para roles personalizados
+                        const rolesGrid = document.createElement('div');
+                        rolesGrid.style.display = 'flex';
+                        rolesGrid.style.flexWrap = 'wrap';
+                        rolesGrid.style.gap = '10px';
+                        
+                        // Añadir cada rol personalizado
+                        customRoles.forEach(role => {
+                            const roleBtn = document.createElement('button');
+                            roleBtn.type = 'button';
+                            roleBtn.className = 'custom-role-btn';
+                            roleBtn.dataset.role = role.identifier;
+                            roleBtn.textContent = role.name;
+                            
+                            // Estilos para los botones de rol personalizado
+                            const bgColor = hexToRgba(role.color || '#3498db', 0.2);
+                            const textColor = role.color || '#3498db';
+                            
+                            roleBtn.style.backgroundColor = bgColor;
+                            roleBtn.style.color = textColor;
+                            roleBtn.style.border = `2px solid ${textColor}40`; // 40 es 25% de opacidad en hex
+                            roleBtn.style.borderRadius = '30px';
+                            roleBtn.style.padding = '8px 15px';
+                            roleBtn.style.fontWeight = '600';
+                            roleBtn.style.cursor = 'pointer';
+                            roleBtn.style.transition = 'all 0.2s ease';
+                            
+                            // Marcar como seleccionado si es el rol actual
+                            if (role.identifier === currentRequiredRole) {
+                                roleBtn.classList.add('selected');
+                                roleBtn.style.backgroundColor = hexToRgba(role.color || '#3498db', 0.4);
+                                roleBtn.style.border = `2px solid ${textColor}`;
+                            }
+                            
+                            // Evento para seleccionar este rol
+                            roleBtn.addEventListener('click', handleRoomRoleSelection);
+                            
+                            rolesGrid.appendChild(roleBtn);
+                        });
+                        
+                        roomCustomRolesContainer.appendChild(rolesGrid);
+                    }
+                }
+            } catch (error) {
+                console.error('Error al cargar roles para el selector:', error);
+                document.getElementById('room-custom-roles-container').innerHTML = 
+                    '<p style="color: red; margin: 0;">Error al cargar roles personalizados</p>';
+            }
+        }
+        
+        // Función para manejar la selección de un rol en el selector de salas
+        function handleRoomRoleSelection() {
+            const roomRequiredRoleInput = document.getElementById('room-required-role');
+            const roomRolesContainer = document.getElementById('room-roles-container');
+            const roomCustomRolesContainer = document.getElementById('room-custom-roles-container');
+            
+            // Obtener todos los botones de rol (sistema y personalizados)
+            const allRoleButtons = [
+                ...roomRolesContainer.querySelectorAll('.role-btn'),
+                ...roomCustomRolesContainer.querySelectorAll('.custom-role-btn')
+            ];
+            
+            // Desmarcar todos los botones
+            allRoleButtons.forEach(btn => {
+                btn.classList.remove('selected');
+                
+                // Restaurar estilos de los botones del sistema
+                if (btn.classList.contains('role-btn')) {
+                    updateRoleButtonStyle(btn, false);
+                } 
+                // Restaurar estilos de los botones personalizados
+                else if (btn.classList.contains('custom-role-btn')) {
+                    const role = btn.dataset.role;
+                    // Buscar el color del botón (está en el style.color)
+                    const textColor = btn.style.color;
+                    // Obtener el color de fondo actual (con opacidad 0.2)
+                    const bgColor = btn.style.backgroundColor.replace('0.4', '0.2');
+                    
+                    btn.style.backgroundColor = bgColor;
+                    btn.style.border = `2px solid ${textColor}40`;
+                }
+            });
+            
+            // Marcar este botón como seleccionado
+            this.classList.add('selected');
+            
+            // Actualizar estilos según el tipo de botón
+            if (this.classList.contains('role-btn')) {
+                updateRoleButtonStyle(this, true);
+            } else if (this.classList.contains('custom-role-btn')) {
+                // Obtener el color del texto y aumentar la opacidad del fondo
+                const textColor = this.style.color;
+                const bgColorWithHigherOpacity = this.style.backgroundColor.replace('0.2', '0.4');
+                
+                this.style.backgroundColor = bgColorWithHigherOpacity;
+                this.style.border = `2px solid ${textColor}`;
+            }
+            
+            // Actualizar el valor del input hidden
+            roomRequiredRoleInput.value = this.dataset.role;
+            console.log(`Rol requerido seleccionado: ${this.dataset.role}`);
+        }
+        
+        // Función para actualizar el estilo de un botón de rol del sistema según si está seleccionado o no
+        function updateRoleButtonStyle(button, isSelected) {
+            // Obtener el color base del botón
+            const role = button.dataset.role;
+            let color;
+            
+            if (role === 'user') {
+                color = '#3498db'; // Azul para usuario
+            } else if (role === 'admin') {
+                color = '#e74c3c'; // Rojo para administrador
+            } else if (role === 'none') {
+                color = '#95a5a6'; // Gris para ninguno
+            } else {
+                color = '#3498db'; // Color por defecto
+            }
+            
+            if (isSelected) {
+                // Aumentar la opacidad y cambiar el borde cuando está seleccionado
+                button.style.backgroundColor = `rgba(${hexToRgb(color)}, 0.4)`;
+                button.style.border = `2px solid ${color}`;
+            } else {
+                // Si no está seleccionado, restaurar los estilos originales
+                button.style.backgroundColor = `rgba(${hexToRgb(color)}, 0.2)`;
+                button.style.border = '2px solid transparent';
+            }
+        }
+        
+        // Confirmar eliminación de sala
+        function confirmDeleteRoom(roomId, roomName) {
+            showModal(
+                'Eliminar Sala',
+                `¿Estás seguro de que deseas eliminar la sala <strong>${roomName}</strong>? Esta acción no se puede deshacer.`,
+                () => deleteRoom(roomId)
+            );
+        }
+        
+        // Eliminar sala
+        async function deleteRoom(roomId) {
+            try {
+                // Usar el endpoint de emergencia
+                console.log("Intentando eliminar sala con ID:", roomId);
+                
+                const response = await fetch('/api/admin/emergency/delete-room', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        roomId: roomId,
+                        password: adminPassword 
+                    })
+                });
+                
+                const data = await response.json();
+                console.log("Respuesta recibida:", data);
+                
+                if (data.success) {
+                    showAlert('Sala eliminada correctamente (modo emergencia)', 'success');
+                    loadRooms();
+                } else {
+                    showAlert(`Error al eliminar sala: ${data.message}`, 'danger');
+                    console.error("Detalles del error:", data);
+                }
+            } catch (error) {
+                showAlert(`Error crítico al eliminar sala: ${error.message}`, 'danger');
+                console.error("Error completo:", error);
+            }
+        }
+        
+        // Guardar sala (crear o actualizar)
+        saveRoomBtn.addEventListener('click', async () => {
+            try {
+                // Validar campos
+                if (!roomNameInput.value.trim()) {
+                    roomErrorDiv.textContent = 'El nombre de la sala es obligatorio';
+                    roomErrorDiv.style.display = 'block';
+                    return;
+                }
+                
+                const roomData = {
+                    name: roomNameInput.value.trim(),
+                    slug: roomSlugInput.value.trim() || null, // Si está vacío, se generará automáticamente
+                    description: roomDescriptionInput.value.trim(),
+                    requiredRole: roomRequiredRoleSelect.value,
+                    isPrivate: roomIsPrivateCheckbox.checked,
+                    isDefault: roomIsDefaultCheckbox.checked
+                };
+                
+                const modalContent = roomModal.querySelector('.modal-content');
+                setLoading(modalContent, true);
+                
+                let response;
+                if (roomIdInput.value) {
+                    // Actualizar sala existente
+                    response = await fetchAPI(`/api/admin/room/${roomIdInput.value}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            ...roomData,
+                            password: adminPassword
+                        })
+                    });
+                } else {
+                    // Crear nueva sala
+                    response = await fetchAPI('/api/admin/room', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            ...roomData,
+                            password: adminPassword
+                        })
+                    });
+                }
+                
+                if (response.success) {
+                    showAlert(`Sala ${roomIdInput.value ? 'actualizada' : 'creada'} correctamente`, 'success');
+                    closeModal('room-modal');
+                    loadRooms();
+                } else {
+                    roomErrorDiv.textContent = response.message || 'Error al guardar sala';
+                    roomErrorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                roomErrorDiv.textContent = error.message || 'Error al guardar sala';
+                roomErrorDiv.style.display = 'block';
+            } finally {
+                const modalContent = roomModal.querySelector('.modal-content');
+                setLoading(modalContent, false);
+            }
+        });
+        
+        // Inicializar salas predeterminadas
+        initDefaultRoomsBtn.addEventListener('click', async () => {
+            try {
+                showModal(
+                    'Inicializar Salas Predeterminadas',
+                    '¿Estás seguro de que deseas reiniciar las salas predeterminadas? Las salas existentes no se eliminarán.',
+                    async () => {
+                        try {
+                            const response = await fetchAPI('/api/admin/rooms/initialize', {
+                                method: 'POST',
+                                body: JSON.stringify({ password: adminPassword })
+                            });
+                            
+                            if (response.success) {
+                                showAlert('Salas predeterminadas inicializadas correctamente', 'success');
+                                loadRooms();
+                            } else {
+                                showAlert(`Error al inicializar salas: ${response.message}`, 'danger');
+                            }
+                        } catch (error) {
+                            showAlert(`Error al inicializar salas: ${error.message}`, 'danger');
+                        }
+                    }
+                );
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'danger');
+            }
+        });
+        
+        // Botón para arreglar estado predeterminado
+        const resetDefaultStateBtn = document.getElementById('reset-default-state-btn');
+        resetDefaultStateBtn.addEventListener('click', async () => {
+            try {
+                showModal(
+                    'Arreglar Estado Predeterminado',
+                    'Esto restablecerá el estado predeterminado de todas las salas, haciendo que SOLO la sala "General" sea predeterminada. ¿Deseas continuar?',
+                    async () => {
+                        try {
+                            const response = await fetchAPI('/api/admin/rooms/reset-default-state', {
+                                method: 'POST',
+                                body: JSON.stringify({ password: adminPassword })
+                            });
+                            
+                            if (response.success) {
+                                showAlert('Estado predeterminado de salas corregido correctamente', 'success');
+                                loadRooms();
+                            } else {
+                                showAlert(`Error al arreglar estado: ${response.message}`, 'danger');
+                            }
+                        } catch (error) {
+                            showAlert(`Error al arreglar estado: ${error.message}`, 'danger');
+                        }
+                    }
+                );
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'danger');
+            }
+        });
+        
+        // Botón para eliminar todas las salas excepto General
+        const cleanRoomsBtn = document.getElementById('clean-rooms-btn');
+        cleanRoomsBtn.addEventListener('click', async () => {
+            try {
+                showModal(
+                    'Eliminar Todas las Salas',
+                    '¿Estás seguro de que deseas eliminar TODAS las salas excepto General? Esta acción no se puede deshacer.',
+                    async () => {
+                        try {
+                            // Obtener todas las salas actuales
+                            const response = await fetchAPI('/api/admin/rooms', {
+                                method: 'POST',
+                                body: JSON.stringify({ password: adminPassword })
+                            });
+                            
+                            if (!response.success) {
+                                showAlert(`Error al obtener salas: ${response.message}`, 'danger');
+                                return;
+                            }
+                            
+                            // Filtrar salas que no sean General
+                            const roomsToDelete = response.rooms.filter(room => room.slug !== 'general');
+                            
+                            if (roomsToDelete.length === 0) {
+                                showAlert('No hay salas para eliminar excepto General', 'info');
+                                return;
+                            }
+                            
+                            // Eliminar cada sala utilizando el endpoint de emergencia
+                            let successCount = 0;
+                            let errorCount = 0;
+                            
+                            const deletePromises = roomsToDelete.map(async room => {
+                                try {
+                                    console.log(`Eliminando sala en modo emergencia: ${room.name} (${room._id})`);
+                                    
+                                    const response = await fetch('/api/admin/emergency/delete-room', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({ 
+                                            roomId: room._id,
+                                            password: adminPassword 
+                                        })
+                                    });
+                                    
+                                    const data = await response.json();
+                                    console.log(`Respuesta para sala ${room.name}:`, data);
+                                    
+                                    if (data.success) {
+                                        successCount++;
+                                    } else {
+                                        errorCount++;
+                                        console.error(`Error al eliminar sala ${room.name}: ${data.message}`, data);
+                                    }
+                                } catch (deleteError) {
+                                    errorCount++;
+                                    console.error(`Error crítico al eliminar sala ${room.name}:`, deleteError);
+                                }
+                            });
+                            
+                            // Esperar a que todas las promesas se resuelvan
+                            await Promise.all(deletePromises);
+                            
+                            if (successCount > 0) {
+                                showAlert(`${successCount} salas eliminadas correctamente${errorCount > 0 ? `, ${errorCount} errores` : ''}`, 'success');
+                            } else {
+                                showAlert('No se pudo eliminar ninguna sala', 'danger');
+                            }
+                            
+                            // Recargar lista de salas
+                            loadRooms();
+                            
+                        } catch (error) {
+                            showAlert(`Error al limpiar salas: ${error.message}`, 'danger');
+                            console.error("Error completo al limpiar salas:", error);
+                        }
+                    }
+                );
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'danger');
+            }
+        });
+
+        // --- GESTIÓN DE ROLES ---
+        
+        // Modificar la función attachUserActionListeners para añadir listener para gestión de roles
+        function attachUserActionListeners() {
+            document.querySelectorAll('.change-password-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.dataset.userId;
+                    const username = this.dataset.username;
+                    openChangePasswordModal(userId, username);
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.dataset.userId;
+                    const username = this.dataset.username;
+                    confirmDeleteUser(userId, username);
+                });
+            });
+            
+
+            
+            document.querySelectorAll('.manage-roles-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.dataset.userId;
+                    const username = this.dataset.username;
+                    const roles = JSON.parse(this.dataset.roles || '["user"]');
+                    openManageRolesModal(userId, username, roles);
+                });
+            });
+        }
+        
+        // Función para abrir el modal de gestión de roles
+        function openManageRolesModal(userId, username, roles) {
+            manageRolesUserIdInput.value = userId;
+            manageRolesUsernameSpan.textContent = username;
+            manageRolesErrorDiv.style.display = 'none';
+            manageRolesErrorDiv.textContent = '';
+            
+            // Limpiar el contenedor de roles actual
+            rolesContainer.innerHTML = '<div class="roles-loading">Cargando roles personalizados...</div>';
+            
+            // Función global para alternar la selección de un rol
+            // Esta función será reusable para todos los botones de rol
+            function handleRoleButtonClick(event) {
+                const button = event.currentTarget;
+                button.classList.toggle('selected');
+                
+                // Obtener información de color del botón
+                let color, textColor;
+                
+                if (button.classList.contains('role-btn')) {
+                    // Es un botón de rol de sistema
+                    const role = button.dataset.role;
+                    color = role === 'user' ? '#3498db' : 
+                           role === 'admin' ? '#e74c3c' : '#95a5a6';
+                    
+                    if (button.classList.contains('selected')) {
+                        button.style.backgroundColor = `rgba(${hexToRgb(color)}, 0.4)`;
+                        button.style.border = `2px solid ${color}`;
+                    } else {
+                        button.style.backgroundColor = `rgba(${hexToRgb(color)}, 0.2)`;
+                        button.style.border = '2px solid transparent';
+                    }
+                } else {
+                    // Es un botón de rol personalizado
+                    color = button.style.color || '#3498db';
+                    
+                    if (button.classList.contains('selected')) {
+                        button.style.backgroundColor = button.style.backgroundColor.replace('0.2', '0.4');
+                        button.style.border = `2px solid ${color}`;
+                    } else {
+                        button.style.backgroundColor = button.style.backgroundColor.replace('0.4', '0.2');
+                        button.style.border = `2px solid ${color}40`;
+                    }
+                }
+            }
+            
+            // Configurar botones de roles del sistema
+            const systemRolesContainer = document.getElementById('system-roles-container');
+            const systemRoleBtns = systemRolesContainer.querySelectorAll('.role-btn');
+            
+            // Resetear todas las selecciones
+            systemRoleBtns.forEach(btn => {
+                // Remover todos los event listeners anteriores
+                const newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+                
+                // Verificar si este rol está incluido en los roles del usuario
+                if (roles.includes(newBtn.dataset.role)) {
+                    newBtn.classList.add('selected');
+                    
+                    // Actualizar estilos visuales
+                    const role = newBtn.dataset.role;
+                    let color = role === 'user' ? '#3498db' : 
+                               role === 'admin' ? '#e74c3c' : '#95a5a6';
+                    
+                    newBtn.style.backgroundColor = `rgba(${hexToRgb(color)}, 0.4)`;
+                    newBtn.style.border = `2px solid ${color}`;
+                }
+                
+                // Añadir evento click
+                newBtn.addEventListener('click', handleRoleButtonClick);
+            });
+            
+            // Cargar todos los roles desde el servidor
+            fetchAPI('/api/admin/custom-roles', {
+                method: 'POST',
+                body: JSON.stringify({ password: adminPassword })
+            })
+            .then(response => {
+                if (response.success && response.roles) {
+                    // Filtrar para obtener solo roles personalizados (no del sistema)
+                    const customRoles = response.roles.filter(role => 
+                        !['user', 'admin', 'moderator', 'support'].includes(role.identifier) && 
+                        !role._id.startsWith('system-')
+                    );
+                    
+                    // Limpiar el contenedor de roles personalizados
+                    rolesContainer.innerHTML = '';
+                    
+                    if (customRoles.length === 0) {
+                        // Mostrar mensaje si no hay roles personalizados
+                        rolesContainer.innerHTML = '<p style="color: #777; font-style: italic;">No hay roles personalizados disponibles</p>';
+                    } else {
+                        // Crear grid para roles personalizados
+                        const rolesGrid = document.createElement('div');
+                        rolesGrid.style.display = 'flex';
+                        rolesGrid.style.flexWrap = 'wrap';
+                        rolesGrid.style.gap = '10px';
+                        
+                        // Añadir cada rol personalizado
+                        customRoles.forEach(role => {
+                            const roleBtn = document.createElement('button');
+                            roleBtn.type = 'button';
+                            roleBtn.className = 'custom-role-btn';
+                            roleBtn.dataset.role = role.identifier;
+                            roleBtn.textContent = role.name;
+                            
+                            // Estilos para los botones de rol personalizado
+                            const bgColor = hexToRgba(role.color || '#3498db', 0.2);
+                            const textColor = role.color || '#3498db';
+                            
+                            roleBtn.style.backgroundColor = bgColor;
+                            roleBtn.style.color = textColor;
+                            roleBtn.style.border = `2px solid ${textColor}40`; // 40 es 25% de opacidad en hex
+                            roleBtn.style.borderRadius = '30px';
+                            roleBtn.style.padding = '8px 15px';
+                            roleBtn.style.fontWeight = '600';
+                            roleBtn.style.cursor = 'pointer';
+                            roleBtn.style.transition = 'all 0.2s ease';
+                            
+                            // Marcar como seleccionado si el usuario tiene este rol
+                            if (roles.includes(role.identifier)) {
+                                roleBtn.classList.add('selected');
+                                roleBtn.style.backgroundColor = hexToRgba(role.color || '#3498db', 0.4);
+                                roleBtn.style.border = `2px solid ${textColor}`;
+                            }
+                            
+                            // Usar el mismo manejador de eventos para consistencia
+                            roleBtn.addEventListener('click', handleRoleButtonClick);
+                            
+                            rolesGrid.appendChild(roleBtn);
+                        });
+                        
+                        rolesContainer.appendChild(rolesGrid);
+                    }
+                } else {
+                    rolesContainer.innerHTML = '<p style="color: red;">Error al cargar roles personalizados</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error al cargar roles personalizados:', error);
+                rolesContainer.innerHTML = '<p style="color: red;">Error al cargar roles personalizados</p>';
+            })
+            .finally(() => {
+                manageRolesModal.style.display = 'flex';
+            });
+        }
+        
+        // Función auxiliar para convertir color hex a rgba
+        function hexToRgba(hex, alpha = 1) {
+            const rgb = hexToRgb(hex).split(',').map(Number);
+            return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+        }
+
+        // Función auxiliar para convertir color hexadecimal a RGB
+        function hexToRgb(hex) {
+            // Asegurar que el hex tenga el formato correcto
+            hex = hex.replace(/^#/, '');
+            
+            // Parsear los componentes
+            let r, g, b;
+            if (hex.length === 3) {
+                r = parseInt(hex.charAt(0) + hex.charAt(0), 16);
+                g = parseInt(hex.charAt(1) + hex.charAt(1), 16);
+                b = parseInt(hex.charAt(2) + hex.charAt(2), 16);
+            } else {
+                r = parseInt(hex.substring(0, 2), 16);
+                g = parseInt(hex.substring(2, 4), 16);
+                b = parseInt(hex.substring(4, 6), 16);
+            }
+            
+            return `${r}, ${g}, ${b}`;
+        }
+
+        // Cerrar modal con botón cancelar
+        cancelRolesBtn.addEventListener('click', () => closeModal('manage-roles-modal'));
+        
+        // Guardar cambios de roles múltiples
+        saveRolesBtn.addEventListener('click', async () => {
+            const userId = manageRolesUserIdInput.value;
+            const username = manageRolesUsernameSpan.textContent;
+            
+            try {
+                // Obtener los roles seleccionados del sistema
+                const systemRolesContainer = document.getElementById('system-roles-container');
+                const selectedSystemRoles = Array.from(systemRolesContainer.querySelectorAll('.role-btn.selected'))
+                    .map(button => button.dataset.role);
+                
+                // Obtener los roles personalizados seleccionados
+                const customRolesContainer = document.getElementById('roles-container');
+                const selectedCustomRoles = Array.from(customRolesContainer.querySelectorAll('.custom-role-btn.selected'))
+                    .map(button => button.dataset.role);
+                
+                // Combinar todos los roles seleccionados
+                let selectedRoles = [...selectedSystemRoles, ...selectedCustomRoles];
+                
+                // Filtrar para eliminar roles no deseados
+                selectedRoles = selectedRoles.filter(role => !['moderator', 'support'].includes(role));
+                
+                if (selectedRoles.length === 0) {
+                    manageRolesErrorDiv.textContent = 'Debe seleccionar al menos un rol';
+                    manageRolesErrorDiv.style.display = 'block';
+                    return;
+                }
+                
+                setLoading(manageRolesModal.querySelector('.modal-content'), true);
+                
+                const response = await fetchAPI(`/api/admin/user/${userId}/roles`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        password: adminPassword,
+                        roles: selectedRoles
+                    })
+                });
+                
+                if (response.success) {
+                    showAlert(`Roles de ${username} actualizados correctamente`, 'success');
+                    closeModal('manage-roles-modal');
+                    loadUsers(); // Recargar usuarios para ver los cambios
+                } else {
+                    manageRolesErrorDiv.textContent = response.message || 'Error al actualizar roles';
+                    manageRolesErrorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                manageRolesErrorDiv.textContent = error.message || 'Error al actualizar roles';
+                manageRolesErrorDiv.style.display = 'block';
+            } finally {
+                setLoading(manageRolesModal.querySelector('.modal-content'), false);
+            }
+        });
+
+        modalCancelBtn.addEventListener('click', () => closeModal('confirmation-modal'));
+
+        window.addEventListener('click', (event) => {
+            if (event.target === confirmationModal) closeModal('confirmation-modal');
+            if (event.target === changePasswordModal) closeModal('change-password-modal');
+            if (event.target === manageRolesModal) closeModal('manage-roles-modal');
+            if (event.target === roomModal) closeModal('room-modal');
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (confirmationModal.style.display === 'flex') closeModal('confirmation-modal');
+                if (changePasswordModal.style.display === 'flex') closeModal('change-password-modal');
+                if (manageRolesModal.style.display === 'flex') closeModal('manage-roles-modal');
+                if (roomModal.style.display === 'flex') closeModal('room-modal');
+            }
+        });
+
+        // --- GESTIÓN DE ROLES PERSONALIZADOS ---
+        
+        // Cargar roles personalizados
+        async function loadCustomRoles() {
+            const rolesCardBody = rolesTable.closest('.card-body');
+            const rolesTableBody = rolesTable.querySelector('tbody');
+            
+            try {
+                setLoading(rolesCardBody, true);
+                refreshRolesBtn.classList.add('loading');
+                
+                // Obtener roles personalizados
+                const response = await fetchAPI('/api/admin/custom-roles', {
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (response.success && response.roles) {
+                    // Filtrar roles para no mostrar moderador y soporte
+                    const filteredRoles = response.roles.filter(role => 
+                        !['moderator', 'support'].includes(role.identifier)
+                    );
+                    
+                    if (filteredRoles.length === 0) {
+                        rolesTableBody.innerHTML = '<tr><td colspan="6" class="empty-message">No hay roles personalizados disponibles.</td></tr>';
+                    } else {
+                        rolesTableBody.innerHTML = '';
+                        filteredRoles.forEach(role => {
+                            const isSystemRole = role.isSystemRole === true || role._id.startsWith('system-');
+                            const colorPreview = `<span class="color-preview" style="background-color: ${role.color || '#3498db'}"></span>`;
+                            
+                            rolesTableBody.innerHTML += `
+                                <tr>
+                                    <td>${role._id.substring(0, 8)}...</td>
+                                    <td>${colorPreview}${escapeHTML(role.name)}</td>
+                                    <td>${escapeHTML(role.identifier)}</td>
+                                    <td>${escapeHTML(role.description || '')}</td>
+                                    <td>
+                                        ${role.isDefault ? 'Sí' : 'No'}
+                                        ${!isSystemRole && role.isDefault ? 
+                                            `<button class="btn btn-sm btn-warning toggle-default-btn" 
+                                                title="Desmarcar como predeterminado" 
+                                                data-role-id="${role._id}" 
+                                                data-role-name="${escapeHTML(role.name)}"
+                                                data-is-default="false">
+                                                <i class="fas fa-star"></i>
+                                            </button>` : 
+                                            !isSystemRole && !role.isDefault ? 
+                                            `<button class="btn btn-sm btn-outline-warning toggle-default-btn" 
+                                                title="Marcar como predeterminado" 
+                                                data-role-id="${role._id}" 
+                                                data-role-name="${escapeHTML(role.name)}"
+                                                data-is-default="true">
+                                                <i class="far fa-star"></i>
+                                            </button>` : ''
+                                        }
+                                    </td>
+                                    <td class="actions">
+                                        <button class="icon-btn edit-role-btn" title="Editar Rol" data-role-id="${role._id}" ${isSystemRole ? 'disabled' : ''}>
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="icon-btn delete-role-btn ${isSystemRole || role.isDefault ? 'disabled' : ''}" 
+                                            title="${isSystemRole ? 'No se puede eliminar un rol del sistema' : role.isDefault ? 'Desmarque como predeterminado primero' : 'Eliminar Rol'}" 
+                                            data-role-id="${role._id}" 
+                                            data-role-name="${escapeHTML(role.name)}"
+                                            ${isSystemRole || role.isDefault ? 'disabled' : ''}>
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    }
+                } else {
+                    rolesTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Error al cargar roles: ${response.message || 'Desconocido'}</td></tr>`;
+                }
+                
+                // Añadir event listeners después de crear las filas
+                attachRoleActionListeners();
+            } catch (error) {
+                showAlert(`Error al cargar roles personalizados: ${error.message}`, 'danger');
+                rolesTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Error crítico al cargar roles.</td></tr>`;
+            } finally {
+                setLoading(rolesCardBody, false);
+                refreshRolesBtn.classList.remove('loading');
+            }
+        }
+        
+        // Añadir event listeners para acciones de roles
+        function attachRoleActionListeners() {
+            document.querySelectorAll('.edit-role-btn').forEach(button => {
+                if (!button.hasAttribute('disabled')) {
+                    button.addEventListener('click', function() {
+                        const roleId = this.dataset.roleId;
+                        editRole(roleId);
+                    });
+                }
+            });
+            
+            document.querySelectorAll('.delete-role-btn').forEach(button => {
+                if (!button.hasAttribute('disabled')) {
+                    button.addEventListener('click', function() {
+                        const roleId = this.dataset.roleId;
+                        const roleName = this.dataset.roleName;
+                        confirmDeleteRole(roleId, roleName);
+                    });
+                }
+            });
+            
+            // Añadir listener para botones de cambiar estado predeterminado
+            document.querySelectorAll('.toggle-default-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const roleId = this.dataset.roleId;
+                    const roleName = this.dataset.roleName;
+                    const isDefault = this.dataset.isDefault === 'true';
+                    toggleDefaultStatus(roleId, roleName, isDefault);
+                });
+            });
+        }
+        
+        // Abrir modal para añadir un nuevo rol
+        addRoleBtn.addEventListener('click', () => {
+            roleModalTitle.textContent = 'Crear Nuevo Rol';
+            roleIdInput.value = '';
+            roleNameInput.value = '';
+            roleIdentifierInput.value = '';
+            roleDescriptionInput.value = '';
+            roleColorInput.value = '#3498db';
+            roleIsDefaultCheckbox.checked = false;
+            roleErrorDiv.style.display = 'none';
+            roleErrorDiv.textContent = '';
+            
+            // Actualizar placeholder para ser más claro
+            roleIdentifierInput.placeholder = 'Se generará automáticamente si se deja vacío';
+            
+            roleModal.style.display = 'flex';
+            roleNameInput.focus();
+            
+            // Evento para generar identificador automático al escribir el nombre
+            const updateIdentifierSuggestion = () => {
+                if (roleIdentifierInput.value.trim() === '') {
+                    const suggestedId = generateIdentifier(roleNameInput.value);
+                    if (suggestedId) {
+                        roleIdentifierInput.placeholder = `Sugerencia: ${suggestedId}`;
+                    }
+                }
+            };
+            
+            // Limpiar eventos anteriores si existen
+            roleNameInput.removeEventListener('input', updateIdentifierSuggestion);
+            // Añadir el evento
+            roleNameInput.addEventListener('input', updateIdentifierSuggestion);
+        });
+        
+        // Abrir modal para editar un rol existente
+        async function editRole(roleId) {
+            try {
+                const response = await fetchAPI(`/api/admin/custom-role/${roleId}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (response.success && response.role) {
+                    const role = response.role;
+                    roleModalTitle.textContent = 'Editar Rol';
+                    roleIdInput.value = role._id;
+                    roleNameInput.value = role.name;
+                    roleIdentifierInput.value = role.identifier;
+                    roleDescriptionInput.value = role.description || '';
+                    roleColorInput.value = role.color || '#3498db';
+                    roleIsDefaultCheckbox.checked = role.isDefault;
+                    roleErrorDiv.style.display = 'none';
+                    roleErrorDiv.textContent = '';
+                    roleModal.style.display = 'flex';
+                    roleNameInput.focus();
+                } else {
+                    showAlert(`Error al cargar rol: ${response.message}`, 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error al cargar rol: ${error.message}`, 'danger');
+            }
+        }
+        
+        // Confirmar eliminación de rol
+        function confirmDeleteRole(roleId, roleName) {
+            showModal(
+                'Eliminar Rol',
+                `¿Estás seguro de que deseas eliminar el rol <strong>${roleName}</strong>? Esta acción no se puede deshacer y puede afectar a los usuarios que tengan este rol asignado.`,
+                () => deleteRole(roleId)
+            );
+        }
+        
+        // Eliminar rol
+        async function deleteRole(roleId) {
+            try {
+                const response = await fetchAPI(`/api/admin/custom-role/${roleId}`, {
+                    method: 'DELETE',
+                    body: JSON.stringify({ password: adminPassword })
+                });
+                
+                if (response.success) {
+                    showAlert('Rol eliminado correctamente', 'success');
+                    loadCustomRoles();
+                    // También actualizamos los usuarios para reflejar los cambios en los roles
+                    loadUsers();
+                } else {
+                    showAlert(`Error al eliminar rol: ${response.message}`, 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error al eliminar rol: ${error.message}`, 'danger');
+            }
+        }
+        
+        // Función para generar un identificador a partir del nombre
+        function generateIdentifier(name) {
+            // Convertir a minúsculas y reemplazar espacios y caracteres especiales
+            return name.toLowerCase()
+                .replace(/\s+/g, '-')       // Reemplazar espacios por guiones
+                .replace(/[^a-z0-9-]/g, '') // Eliminar caracteres no permitidos
+                .replace(/-+/g, '-')        // Reemplazar múltiples guiones por uno solo
+                .replace(/^-|-$/g, '');     // Eliminar guiones al inicio y al final
+        }
+        
+        // Guardar rol (crear o actualizar)
+        saveRoleBtn.addEventListener('click', async () => {
+            try {
+                // Validar campos
+                if (!roleNameInput.value.trim()) {
+                    roleErrorDiv.textContent = 'El nombre del rol es obligatorio';
+                    roleErrorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Validar identificador (solo letras minúsculas, números y guiones)
+                let identifier = roleIdentifierInput.value.trim();
+                
+                // Si el identificador está vacío, generarlo a partir del nombre
+                if (!identifier) {
+                    identifier = generateIdentifier(roleNameInput.value);
+                    // Si sigue vacío o es una palabra reservada, generar uno con timestamp
+                    if (!identifier || ['user', 'admin', 'moderator', 'support', 'none'].includes(identifier)) {
+                        identifier = 'custom-' + Date.now().toString().substring(8);
+                    }
+                } else if (!/^[a-z0-9-]+$/.test(identifier)) {
+                    roleErrorDiv.textContent = 'El identificador solo puede contener letras minúsculas, números y guiones';
+                    roleErrorDiv.style.display = 'block';
+                    return;
+                }
+                
+                console.log("Usando identificador:", identifier);
+                
+                const roleData = {
+                    name: roleNameInput.value.trim(),
+                    identifier: identifier, // Usar el identificador generado o proporcionado
+                    description: roleDescriptionInput.value.trim(),
+                    color: roleColorInput.value,
+                    isDefault: roleIsDefaultCheckbox.checked
+                };
+                
+                const modalContent = roleModal.querySelector('.modal-content');
+                setLoading(modalContent, true);
+                
+                console.log("Enviando datos del rol:", JSON.stringify(roleData));
+                let response;
+                
+                try {
+                    if (roleIdInput.value) {
+                        // Actualizar rol existente
+                        response = await fetchAPI(`/api/admin/custom-role/${roleIdInput.value}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                                ...roleData,
+                                password: adminPassword
+                            })
+                        });
+                    } else {
+                        // Crear nuevo rol
+                        response = await fetchAPI('/api/admin/custom-role', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                ...roleData,
+                                password: adminPassword
+                            })
+                        });
+                    }
+                    
+                    if (response.success) {
+                        showAlert(`Rol ${roleIdInput.value ? 'actualizado' : 'creado'} correctamente`, 'success');
+                        closeModal('role-modal');
+                        loadCustomRoles();
+                    } else {
+                        console.error("Error en la respuesta del servidor:", response);
+                        roleErrorDiv.textContent = response.message || 'Error al guardar rol';
+                        roleErrorDiv.style.display = 'block';
+                    }
+                } catch (err) {
+                    console.error("Error detallado:", err);
+                    if (err.message.includes("identifier")) {
+                        roleErrorDiv.textContent = "Error con el identificador. Prueba con uno diferente o déjalo vacío.";
+                    } else {
+                        roleErrorDiv.textContent = `Error: ${err.message}`;
+                    }
+                    roleErrorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                roleErrorDiv.textContent = error.message || 'Error al guardar rol';
+                roleErrorDiv.style.display = 'block';
+            } finally {
+                const modalContent = roleModal.querySelector('.modal-content');
+                setLoading(modalContent, false);
+            }
+        });
+        
+        // Añadir los botones de roles a los listeners de eventos de cierre
+        refreshRolesBtn.addEventListener('click', loadCustomRoles);
+
+        // Después de la función deleteRole, añadir la nueva función toggleDefaultStatus:
+        // Cambiar el estado predeterminado de un rol
+        async function toggleDefaultStatus(roleId, roleName, isDefault) {
+            try {
+                const response = await fetchAPI(`/api/admin/custom-role/${roleId}/default-status`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ 
+                        password: adminPassword,
+                        isDefault: isDefault
+                    })
+                });
+                
+                if (response.success) {
+                    showAlert(`Estado del rol ${roleName} cambiado a ${isDefault ? 'predeterminado' : 'no predeterminado'} correctamente`, 'success');
+                    loadCustomRoles();
+                    // También actualizamos los usuarios para reflejar los cambios en los roles
+                    loadUsers();
+                } else {
+                    showAlert(`Error al cambiar estado del rol: ${response.message}`, 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error al cambiar estado del rol: ${error.message}`, 'danger');
+            }
+        }
     </script>
 </body>
 </html> 

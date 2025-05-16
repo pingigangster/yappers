@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: white;
+}
+
+/* Estilos personalizados para las salas de chat */
+.room-btn {
+  transition: all 0.2s ease-in-out;
+}
+
+.room-btn:hover {
+  transform: translateY(-1px);
+}
+
+.room-btn.active {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+} 

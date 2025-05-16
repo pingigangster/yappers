@@ -141,7 +141,189 @@
         .back-button:hover {
             color: var(--primary-color);
         }
+        
+        /* Estilos para la pantalla de carga */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--dark-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: #fff;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: spin 2s linear infinite;
+        }
+        
+        .loading-progress {
+            width: 80%;
+            max-width: 300px;
+            height: 10px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background-color: var(--success-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .loading-text {
+            font-size: 1.2rem;
+            text-align: center;
+            padding: 0 20px;
+        }
+        
+        .loading-status {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 0.5rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Ocultar la interfaz de chat hasta que se complete la carga */
+        .chat-container {
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+        
+        .chat-container.loaded {
+            opacity: 1;
+        }
+        
+        /* Estilos para el selector de salas */
+        .rooms-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 20px;
+        }
+        
+        .room-btn {
+            background-color: var(--dark-color-b);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+        
+        .room-btn:hover {
+            background-color: var(--dark-color);
+            transform: translateY(-2px);
+        }
+        
+        .room-btn.active {
+            background-color: var(--primary-color);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .current-room {
+            font-size: 0.9rem;
+            color: #fff;
+            background-color: var(--dark-color-a);
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-left: 5px;
+        }
     </style>
+    <script>
+        // Variables globales que serán manejadas por main.js
+        window.username = null;
+        window.token = null;
+        
+        // Variables de la pantalla de carga
+        const loadingScreen = document.getElementById('loading-screen');
+        const progressBar = document.getElementById('progress-bar');
+        const loadingStatus = document.getElementById('loading-status');
+        const chatContainer = document.getElementById('chat-container');
+        
+        // Función para actualizar el progreso
+        window.updateLoadingProgress = function(percent, statusText) {
+            console.log(`Actualización de progreso: ${percent}% - ${statusText}`);
+            progressBar.style.width = `${percent}%`;
+            if (statusText) {
+                loadingStatus.textContent = statusText;
+            }
+            
+            // Si llega al 100%, después de un breve retraso, ocultar la pantalla de carga
+            if (percent >= 100) {
+                setTimeout(() => {
+                    console.log('Carga completada, mostrando interfaz...');
+                    loadingScreen.classList.add('hidden');
+                    chatContainer.classList.add('loaded');
+                }, 500);
+            }
+        };
+        
+        // Script de inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            // Validar que los elementos existan
+            console.log('Interfaz cargada. Verificando elementos...');
+            const fileInput = document.getElementById('media-upload');
+            if (fileInput) {
+                console.log('Input de archivo encontrado');
+                fileInput.addEventListener('click', () => {
+                    console.log('Click en input de archivo');
+                });
+            } else {
+                console.error('¡ERROR! Input de archivo no encontrado');
+            }
+            
+            // Iniciar con la pantalla de carga
+            window.updateLoadingProgress(10, 'Preparando conexión...');
+            
+            // Verificar que Socket.io esté disponible
+            window.socketCheck = function() {
+                console.log('Verificando disponibilidad de Socket.io...');
+                if (typeof io === 'undefined') {
+                    console.error('Socket.io no está cargado, reintentando en 1 segundo...');
+                    window.updateLoadingProgress(15, 'Error al conectar con el servidor, reintentando...');
+                    setTimeout(window.socketCheck, 1000);
+                } else {
+                    console.log('Socket.io disponible, inicialización continuará en main.js');
+                    window.updateLoadingProgress(20, 'Socket.io disponible, continuando...');
+                }
+            };
+            
+            // Iniciar verificación de socket
+            window.socketCheck();
+            
+            // Agregar un failsafe para evitar que se quede cargando indefinidamente
+            setTimeout(() => {
+                if (loadingScreen && !loadingScreen.classList.contains('hidden')) {
+                    console.error('Forzando mostrar chat después de 10 segundos por timeout');
+                    window.updateLoadingProgress(100, 'Error al cargar, continuando de todos modos...');
+                }
+            }, 10000);
+        });
+    </script>
 </head>
 <body>
     <div class="welcome-container">
@@ -168,10 +350,100 @@
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // Todo el código relacionado con el inicio de sesión como invitado se ha eliminado
-        });
-    </script>
+    <!-- Pantalla de carga -->
+    <div id="loading-screen" class="loading-screen">
+        <i class="fas fa-sync loading-icon"></i>
+        <h2>Cargando mensajes</h2>
+        <div class="loading-progress">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <div class="loading-text">
+            Preparando tu conversación...
+            <div id="loading-status" class="loading-status">Conectando al servidor...</div>
+        </div>
+    </div>
+
+    <div id="chat-container" class="chat-container">
+        <header class="chat-header">
+            <h1>100% REAL XAT</h1>
+            
+            <!-- Selector de salas - Estructura actualizada -->
+            <div class="rooms-selector">
+                <span>Sala:</span>
+                <span id="current-room" class="current-room">general</span>
+                <div class="room-buttons">
+                    <button class="room-btn active" data-room="general">General</button>
+                    <button class="room-btn" data-room="soporte">Soporte</button>
+                    <button class="room-btn" data-room="tecnologia">Tecnología</button>
+                    <button class="room-btn" data-room="casual">Casual</button>
+                </div>
+            </div>
+            
+            <div class="user-info">
+                <span id="username-display"></span>
+                <a href="#" class="btn" id="logout-btn">Cerrar Sesión</a>
+            </div>
+        </header>
+        <main class="chat-main">
+            <div class="sidebar">
+                <h3>Usuarios Conectados</h3>
+                <ul id="users"></ul>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <!-- Zona para arrastrar y soltar archivos multimedia -->
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Suelta tu archivo aquí</p>
+                        <span class="drop-zone-hint">Cualquier tipo de archivo (imágenes, documentos, videos...)</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div class="chat-form-container">
+            <form id="chat-form">
+                <div class="input-wrapper" data-tooltip="Puedes pegar imágenes o GIFs (Ctrl+V)">
+                    <input
+                        id="msg"
+                        type="text"
+                        placeholder="Escribe un mensaje..."
+                        autocomplete="off"
+                    />
+                </div>
+                <button type="button" id="emoji-btn" class="btn-emoji" title="Insertar emoji">
+                    <i class="fas fa-smile"></i>
+                </button>
+                <div id="emoji-picker" class="emoji-picker">
+                    <!-- Emojis se cargarán aquí -->
+                </div>
+                <label for="media-upload" class="btn-image" title="Subir cualquier tipo de archivo">
+                    <i class="fas fa-file-upload"></i>
+                    <input 
+                        type="file" 
+                        id="media-upload" 
+                        name="media-upload"
+                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.txt,.rtf,application/*"
+                        style="position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0;"
+                        onchange="console.log('Cambio en input de archivo detectado')"
+                    >
+                </label>
+                <button type="submit" class="btn">Enviar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para ver archivos multimedia -->
+    <div id="img-modal" class="img-modal">
+        <span class="close-btn"><i class="fas fa-times"></i></span>
+        <div class="modal-content">
+            <!-- El contenido será insertado dinámicamente: imagen, GIF o video -->
+        </div>
+    </div>
+
+    <!-- Scripts necesarios -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.11.2/qs.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html> 

@@ -9,6 +9,8 @@ const moment = require('moment');
 const stream = require('stream');
 const { promisify } = require('util');
 const { sendWelcomeEmail, sendPasswordResetEmail } = require('../utils/mailer');
+const Room = require('./models/Room');
+const roleController = require('./controllers/roleController');
 
 // Configuración de JWT
 const JWT_SECRET = 'chat_app_secret_key_2023'; // Idealmente esto debería estar en variables de entorno
@@ -576,12 +578,13 @@ const userController = {
 // Controladores para mensajes
 const messageController = {
     // Guardar un mensaje de texto
-    async saveTextMessage(username, userId, text) {
+    async saveTextMessage(username, userId, text, room = 'general') {
         try {
             const message = new Message({
                 text,
                 username,
                 userId,
+                room,
                 time: formatTime(),
                 createdAt: new Date()
             });
@@ -829,7 +832,45 @@ const messageController = {
         }
     },
     
-    // NUEVAS FUNCIONES PARA ADMINISTRADOR
+    // Obtener mensajes por sala
+    async getMessagesByRoom(room = 'general', limit = 50) {
+        try {
+            const messages = await Message.find({ room: room })
+                .sort({ createdAt: 1 })
+                .limit(limit)
+                .lean();
+            
+            // Transformar cada mensaje para enviarlo al cliente
+            const transformedMessages = messages.map(msg => {
+                // Crear la URL para archivos multimedia si es necesario
+                let mediaUrl = msg.media;
+                if (msg.mediaId) {
+                    mediaUrl = `/api/files/${msg.mediaId}`;
+                }
+                
+                return {
+                    _id: msg._id.toString(),
+                    username: msg.username,
+                    userId: msg.userId,
+                    text: msg.text,
+                    room: msg.room || 'general',
+                    time: moment(msg.createdAt).format('HH:mm'),
+                    fileType: msg.fileType,
+                    fileName: msg.fileName,
+                    fileSize: msg.fileSize,
+                    mediaId: msg.mediaId,
+                    createdAt: msg.createdAt
+                };
+            });
+            
+            console.log(`Obtenidos ${transformedMessages.length} mensajes de la sala ${room}`);
+            return transformedMessages;
+        } catch (error) {
+            console.error(`Error al obtener mensajes de sala ${room}: ${error}`);
+            // En caso de error, devolver array vacío para mantener consistencia
+            return [];
+        }
+    },
     
     // Eliminar todos los mensajes
     async deleteAllMessages() {
@@ -977,4 +1018,182 @@ const messageController = {
     },
 };
 
-module.exports = { userController, messageController, authController }; 
+// Controlador para salas
+const roomController = {
+    // Obtener todas las salas
+    async getAllRooms() {
+        try {
+            const rooms = await Room.find().sort({ name: 1 }).lean();
+            return rooms;
+        } catch (error) {
+            console.error(`Error al obtener todas las salas: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Obtener una sala por su ID
+    async getRoomById(roomId) {
+        try {
+            const room = await Room.findById(roomId).lean();
+            return room;
+        } catch (error) {
+            console.error(`Error al obtener sala por ID: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Obtener una sala por su slug
+    async getRoomBySlug(slug) {
+        try {
+            const room = await Room.findOne({ slug }).lean();
+            return room;
+        } catch (error) {
+            console.error(`Error al obtener sala por slug: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Crear una nueva sala
+    async createRoom(roomData) {
+        try {
+            // Generar slug a partir del nombre si no se proporciona
+            if (!roomData.slug) {
+                roomData.slug = roomData.name
+                    .toLowerCase()
+                    .replace(/\s+/g, '-')
+                    .replace(/[^\w\-]+/g, '')
+                    .replace(/\-\-+/g, '-')
+                    .replace(/^-+/, '')
+                    .replace(/-+$/, '');
+            }
+            
+            const room = new Room(roomData);
+            await room.save();
+            return room;
+        } catch (error) {
+            console.error(`Error al crear sala: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Actualizar una sala existente
+    async updateRoom(roomId, roomData) {
+        try {
+            // Generar slug a partir del nombre si se actualiza el nombre pero no el slug
+            if (roomData.name && !roomData.slug) {
+                roomData.slug = roomData.name
+                    .toLowerCase()
+                    .replace(/\s+/g, '-')
+                    .replace(/[^\w\-]+/g, '')
+                    .replace(/\-\-+/g, '-')
+                    .replace(/^-+/, '')
+                    .replace(/-+$/, '');
+            }
+            
+            // Establecer la fecha de actualización
+            roomData.updatedAt = new Date();
+            
+            const room = await Room.findByIdAndUpdate(
+                roomId,
+                roomData,
+                { new: true, runValidators: true }
+            );
+            
+            return room;
+        } catch (error) {
+            console.error(`Error al actualizar sala: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Eliminar una sala
+    async deleteRoom(roomId) {
+        try {
+            // Verificar que exista la sala
+            const room = await Room.findById(roomId);
+            
+            if (!room) {
+                throw new Error('Sala no encontrada');
+            }
+            
+            // Proteger solo la sala general
+            if (room.slug === 'general') {
+                throw new Error('No se puede eliminar la sala General');
+            }
+            
+            // Para el resto de salas, permitir eliminar independientemente del estado isDefault
+            await Room.findByIdAndDelete(roomId);
+            return { success: true, message: 'Sala eliminada correctamente' };
+        } catch (error) {
+            console.error(`Error al eliminar sala: ${error}`);
+            throw error;
+        }
+    },
+    
+    // Verificar si un usuario tiene acceso a una sala
+    async checkAccess(roomId, userId) {
+        try {
+            const room = await Room.findById(roomId);
+            const user = await User.findById(userId);
+            
+            if (!room || !user) {
+                return false;
+            }
+            
+            return room.hasAccess(user);
+        } catch (error) {
+            console.error(`Error al verificar acceso a sala: ${error}`);
+            return false;
+        }
+    },
+    
+    // Inicializar salas predeterminadas
+    async initDefaultRooms() {
+        try {
+            const defaultRooms = [
+                {
+                    name: 'General',
+                    slug: 'general',
+                    description: 'Chat general para todos los usuarios',
+                    requiredRole: 'none',
+                    isPrivate: false,
+                    isDefault: true
+                }
+                // Las demás salas predeterminadas han sido eliminadas
+            ];
+            
+            // Crear salas si no existen
+            for (const roomData of defaultRooms) {
+                const existingRoom = await Room.findOne({ slug: roomData.slug });
+                if (!existingRoom) {
+                    await this.createRoom(roomData);
+                    console.log(`Sala predeterminada creada: ${roomData.name}`);
+                } else {
+                    // Actualizar el estado isDefault para asegurar que coincida con la configuración
+                    if (existingRoom.isDefault !== roomData.isDefault) {
+                        await Room.findByIdAndUpdate(
+                            existingRoom._id,
+                            { isDefault: roomData.isDefault },
+                            { new: true }
+                        );
+                        console.log(`Estado 'isDefault' actualizado para ${roomData.name}: ${roomData.isDefault}`);
+                    }
+                }
+            }
+            
+            return { success: true, message: 'Salas predeterminadas inicializadas correctamente' };
+        } catch (error) {
+            console.error(`Error al inicializar salas predeterminadas: ${error}`);
+            throw error;
+        }
+    }
+};
+
+// Exportar controladores
+module.exports = {
+    authController,
+    userController,
+    messageController,
+    roomController,
+    roleController
+}; 

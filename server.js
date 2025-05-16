@@ -17,7 +17,7 @@ require('./config/passport');
 
 // Conexión a MongoDB
 const connectDB = require('./db/connection');
-const { userController, messageController, authController } = require('./db/controllers');
+const { userController, messageController, authController, roomController, roleController } = require('./db/controllers');
 
 // Configuración
 const MAX_MESSAGE_LENGTH = 200; // Límite de caracteres para mensajes
@@ -1276,6 +1276,23 @@ io.on('connection', async (socket) => {
     console.log(`Nueva conexión: ${socket.id}`);
     socket.emit('connectionEstablished', { id: socket.id });
     
+    // Enviar salas disponibles al cliente cuando se conecta
+    try {
+        const rooms = await roomController.getAllRooms();
+        // Transformar para enviar solo información necesaria
+        const simplifiedRooms = rooms.map(room => ({
+            id: room._id,
+            name: room.name,
+            slug: room.slug,
+            description: room.description,
+            requiredRole: room.requiredRole
+        }));
+        socket.emit('roomsUpdated', simplifiedRooms);
+        console.log(`Lista de ${simplifiedRooms.length} salas enviada a cliente ${socket.id}`);
+    } catch (error) {
+        console.error('Error al enviar salas al cliente:', error);
+    }
+    
     // Manejar eventos de ping para verificación de conexión
     socket.on('ping', (data, callback) => {
         // Solo para diagnóstico
@@ -1568,7 +1585,7 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // Listener para chatMessage (SIN CAMBIOS)
+    // Listener para chatMessage
     socket.on('chatMessage', async (msg, callback) => {
         try {
             // Obtener usuario por socketId
@@ -1576,26 +1593,31 @@ io.on('connection', async (socket) => {
             const user = users.find(u => u.socketId === socket.id);
 
             if (user) {
-                // Validar y limitar longitud del mensaje
-                const validatedMsg = msg.length > MAX_MESSAGE_LENGTH 
-                    ? msg.substring(0, MAX_MESSAGE_LENGTH) 
-                    : msg;
+                // Extraer texto y sala del mensaje
+                const messageText = msg.text || '';
+                const room = msg.room || 'general';
                 
-                // Guardar mensaje en la base de datos
-                const savedMessage = await messageController.saveTextMessage(user.username, socket.id, validatedMsg);
+                // Validar y limitar longitud del mensaje
+                const validatedMsg = messageText.length > MAX_MESSAGE_LENGTH 
+                    ? messageText.substring(0, MAX_MESSAGE_LENGTH) 
+                    : messageText;
+                
+                // Guardar mensaje en la base de datos, incluyendo la sala
+                const savedMessage = await messageController.saveTextMessage(user.username, socket.id, validatedMsg, room);
                 
                 // Formatear mensaje para enviar a los clientes
                 const formattedMessage = {
                     username: user.username,
                     userId: socket.id,
                     text: validatedMsg,
+                    room: room, // Incluir la sala en el mensaje formateado
                     time: moment(savedMessage.createdAt).format('HH:mm'),
                     _id: savedMessage._id.toString() // Incluir ID para posible referencia futura
                 };
 
-                // CORREGIDO: Emitir a todos EXCEPTO al remitente
-                socket.broadcast.emit('message', formattedMessage);
-                console.log(`Mensaje de ${user.username} emitido a todos los demás.`);
+                // Emitir a todos EXCEPTO al remitente, pero solo en la misma sala
+                socket.to(room).emit('message', formattedMessage);
+                console.log(`Mensaje de ${user.username} emitido a sala ${room}.`);
 
                 // Enviar confirmación al remitente (callback)
                 if (callback && typeof callback === 'function') {
@@ -1612,6 +1634,73 @@ io.on('connection', async (socket) => {
              if (callback && typeof callback === 'function') {
                  callback({ success: false, error: 'Error interno al procesar mensaje.' });
              }
+        }
+    });
+
+    // Evento para unirse a una sala
+    socket.on('joinRoom', async (data) => {
+        try {
+            const users = await userController.getConnectedUsers();
+            const user = users.find(u => u.socketId === socket.id);
+            
+            if (!user) {
+                console.error(`Usuario no encontrado para socket ${socket.id} al intentar unirse a sala`);
+                return;
+            }
+            
+            // Salir de todas las salas actuales excepto la de su propio socket
+            const socketRooms = Array.from(socket.rooms);
+            socketRooms.forEach(room => {
+                if (room !== socket.id) {
+                    socket.leave(room);
+                }
+            });
+            
+            // Unirse a la nueva sala
+            const room = data.room || 'general';
+            socket.join(room);
+            
+            console.log(`Usuario ${user.username} se unió a la sala: ${room}`);
+        } catch (error) {
+            console.error('Error al unirse a sala:', error);
+        }
+    });
+
+    // Evento para solicitar mensajes de una sala específica
+    socket.on('getMessages', async (data) => {
+        try {
+            const room = data.room || 'general';
+            const users = await userController.getConnectedUsers();
+            const user = users.find(u => u.socketId === socket.id);
+            
+            if (!user) {
+                console.error(`Usuario no encontrado para socket ${socket.id} al solicitar mensajes de sala`);
+                return;
+            }
+            
+            // Usar la función específica para obtener mensajes de una sala
+            const messages = await messageController.getMessagesByRoom(room, 50);
+            
+            // Transformar los mensajes para el cliente
+            const formattedMessages = messages.map(msg => {
+                return {
+                    username: msg.username,
+                    userId: msg.userId,
+                    text: msg.text,
+                    room: msg.room || 'general',
+                    time: moment(msg.createdAt).format('HH:mm'),
+                    _id: msg._id.toString(),
+                    mediaId: msg.mediaId,
+                    fileType: msg.fileType,
+                    fileName: msg.fileName,
+                    fileSize: msg.fileSize
+                };
+            });
+            
+            console.log(`Enviando ${formattedMessages.length} mensajes de la sala ${room} a ${user.username}`);
+            socket.emit('roomMessages', formattedMessages);
+        } catch (error) {
+            console.error('Error al obtener mensajes de sala:', error);
         }
     });
 
@@ -2043,4 +2132,690 @@ app.get('/forgot-password', (req, res) => {
 
 app.get('/reset-password', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
+});
+
+// --- RUTAS DE API PARA GESTIÓN DE SALAS ---
+
+// Obtener todas las salas
+app.get('/api/admin/rooms', verifyAdminToken, async (req, res) => {
+    try {
+        const rooms = await roomController.getAllRooms();
+        res.json({ success: true, rooms });
+    } catch (error) {
+        console.error('Error al obtener salas:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Permitir también solicitudes POST a la misma ruta para facilitar envío del password en body
+app.post('/api/admin/rooms', verifyAdminToken, async (req, res) => {
+    try {
+        const rooms = await roomController.getAllRooms();
+        res.json({ success: true, rooms });
+    } catch (error) {
+        console.error('Error al obtener salas:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Obtener una sala por ID
+app.get('/api/admin/room/:roomId', verifyAdminToken, async (req, res) => {
+    try {
+        const room = await roomController.getRoomById(req.params.roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'Sala no encontrada' });
+        }
+        res.json({ success: true, room });
+    } catch (error) {
+        console.error('Error al obtener sala:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Permitir también solicitudes POST para obtener sala por ID
+app.post('/api/admin/room/:roomId', verifyAdminToken, async (req, res) => {
+    try {
+        const room = await roomController.getRoomById(req.params.roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'Sala no encontrada' });
+        }
+        res.json({ success: true, room });
+    } catch (error) {
+        console.error('Error al obtener sala:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Crear una nueva sala
+app.post('/api/admin/room', verifyAdminToken, async (req, res) => {
+    try {
+        const roomData = req.body;
+        
+        // Validar datos
+        if (!roomData.name) {
+            return res.status(400).json({ success: false, message: 'El nombre de la sala es obligatorio' });
+        }
+        
+        const room = await roomController.createRoom(roomData);
+        res.status(201).json({ success: true, room });
+        
+        // Emitir evento para actualizar salas en todos los clientes
+        const allRooms = await roomController.getAllRooms();
+        const simplifiedRooms = allRooms.map(r => ({
+            id: r._id,
+            name: r.name,
+            slug: r.slug,
+            description: r.description,
+            requiredRole: r.requiredRole
+        }));
+        io.emit('roomsUpdated', simplifiedRooms);
+        console.log(`Evento roomsUpdated emitido tras crear sala ${room.name}`);
+    } catch (error) {
+        console.error('Error al crear sala:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Actualizar una sala existente
+app.put('/api/admin/room/:roomId', verifyAdminToken, async (req, res) => {
+    try {
+        const roomId = req.params.roomId;
+        const roomData = req.body;
+        
+        // Validar datos
+        if (Object.keys(roomData).length === 0) {
+            return res.status(400).json({ success: false, message: 'No se proporcionaron datos para actualizar' });
+        }
+        
+        const updatedRoom = await roomController.updateRoom(roomId, roomData);
+        if (!updatedRoom) {
+            return res.status(404).json({ success: false, message: 'Sala no encontrada' });
+        }
+        
+        res.json({ success: true, room: updatedRoom });
+        
+        // Emitir evento para actualizar salas en todos los clientes
+        const allRooms = await roomController.getAllRooms();
+        const simplifiedRooms = allRooms.map(r => ({
+            id: r._id,
+            name: r.name,
+            slug: r.slug,
+            description: r.description,
+            requiredRole: r.requiredRole
+        }));
+        io.emit('roomsUpdated', simplifiedRooms);
+        console.log(`Evento roomsUpdated emitido tras actualizar sala ${updatedRoom.name}`);
+    } catch (error) {
+        console.error('Error al actualizar sala:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Eliminar una sala
+app.delete('/api/admin/room/:roomId', verifyAdminToken, async (req, res) => {
+    try {
+        const roomId = req.params.roomId;
+        const result = await roomController.deleteRoom(roomId);
+        
+        res.json(result);
+        
+        // Emitir evento para actualizar salas en todos los clientes
+        const allRooms = await roomController.getAllRooms();
+        const simplifiedRooms = allRooms.map(r => ({
+            id: r._id,
+            name: r.name,
+            slug: r.slug,
+            description: r.description,
+            requiredRole: r.requiredRole
+        }));
+        io.emit('roomsUpdated', simplifiedRooms);
+        console.log(`Evento roomsUpdated emitido tras eliminar sala`);
+    } catch (error) {
+        console.error('Error al eliminar sala:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Inicializar salas predeterminadas
+app.post('/api/admin/rooms/initialize', verifyAdminToken, async (req, res) => {
+    try {
+        const result = await roomController.initDefaultRooms();
+        
+        // Emitir evento para actualizar salas en todos los clientes
+        const allRooms = await roomController.getAllRooms();
+        const simplifiedRooms = allRooms.map(r => ({
+            id: r._id,
+            name: r.name,
+            slug: r.slug,
+            description: r.description,
+            requiredRole: r.requiredRole
+        }));
+        
+        res.json({ 
+            success: true, 
+            message: result.message,
+            rooms: simplifiedRooms 
+        });
+        
+        io.emit('roomsUpdated', simplifiedRooms);
+        console.log(`Evento roomsUpdated emitido tras inicializar salas predeterminadas`);
+    } catch (error) {
+        console.error('Error al inicializar salas:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Forzar actualización del estado predeterminado de las salas
+app.post('/api/admin/rooms/reset-default-state', verifyAdminToken, async (req, res) => {
+    try {
+        const Room = require('./db/models/Room');
+        
+        // Primero marcar todas las salas como no predeterminadas
+        await Room.updateMany({}, { isDefault: false });
+        console.log('Todas las salas marcadas como no predeterminadas');
+        
+        // Luego marcar solo la sala General como predeterminada
+        const generalRoom = await Room.findOneAndUpdate(
+            { slug: 'general' }, 
+            { isDefault: true },
+            { new: true }
+        );
+        
+        if (!generalRoom) {
+            console.log('Advertencia: No se encontró la sala general');
+        } else {
+            console.log('Sala General marcada como predeterminada');
+        }
+        
+        // Obtener todas las salas actualizadas
+        const allRooms = await roomController.getAllRooms();
+        const simplifiedRooms = allRooms.map(r => ({
+            id: r._id,
+            name: r.name,
+            slug: r.slug,
+            description: r.description,
+            requiredRole: r.requiredRole,
+            isDefault: r.isDefault
+        }));
+        
+        res.json({
+            success: true,
+            message: 'Estado predeterminado de salas actualizado correctamente',
+            rooms: simplifiedRooms
+        });
+        
+        // Notificar a los clientes
+        io.emit('roomsUpdated', simplifiedRooms);
+        console.log('Evento roomsUpdated emitido tras actualizar estado predeterminado');
+    } catch (error) {
+        console.error('Error al actualizar estado de salas:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Obtener salas para clientes (sin token, para mostrar en la interfaz)
+app.get('/api/rooms', async (req, res) => {
+    try {
+        const rooms = await roomController.getAllRooms();
+        // Solo enviar información básica, no detalles de configuración
+        const simplifiedRooms = rooms.map(room => ({
+            id: room._id,
+            name: room.name,
+            slug: room.slug,
+            description: room.description
+        }));
+        res.json({ success: true, rooms: simplifiedRooms });
+    } catch (error) {
+        console.error('Error al obtener salas para clientes:', error);
+        res.status(500).json({ success: false, message: 'Error al obtener salas' });
+    }
+});
+
+// --- RUTAS DE API PARA GESTIÓN DE ROLES DE USUARIOS ---
+
+// Actualizar el rol principal de un usuario
+app.put('/api/admin/user/:userId/role', verifyAdminToken, async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const { role } = req.body;
+        
+        // Validar que se proporcione un rol
+        if (!role) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Debe proporcionar un rol válido' 
+            });
+        }
+        
+        // Los roles predeterminados del sistema
+        const systemRoles = ['user', 'admin'];
+        
+        // Obtener roles personalizados desde la base de datos
+        const CustomRole = require('./db/models/CustomRole');
+        const customRoles = await CustomRole.find().select('identifier');
+        const validCustomRoleIds = customRoles.map(role => role.identifier);
+        
+        // Combinar roles del sistema y personalizados
+        const allValidRoles = [...systemRoles, ...validCustomRoleIds];
+        
+        if (!allValidRoles.includes(role)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Rol inválido: ${role}. Asegúrese de que el rol esté creado en el sistema.` 
+            });
+        }
+        
+        // Buscar el usuario
+        const User = require('./db/models/User');
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+        }
+        
+        // Actualizar el rol principal
+        user.role = role;
+        
+        // Asegurar que el rol principal esté en el array de roles
+        if (!user.roles) {
+            user.roles = [role];
+        } else if (!user.roles.includes(role)) {
+            user.roles.push(role);
+        }
+        
+        await user.save();
+        
+        res.json({ 
+            success: true, 
+            message: `Rol principal de ${user.username} actualizado a ${role}`,
+            user: {
+                id: user._id,
+                username: user.username,
+                role: user.role,
+                roles: user.roles
+            }
+        });
+    } catch (error) {
+        console.error('Error al actualizar rol de usuario:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Actualizar roles múltiples de un usuario
+app.put('/api/admin/user/:userId/roles', verifyAdminToken, async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const { roles } = req.body;
+        
+        // Validar formato de roles
+        if (!Array.isArray(roles) || roles.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Debe proporcionar al menos un rol válido en formato de array' 
+            });
+        }
+        
+        // Los roles predeterminados del sistema
+        const systemRoles = ['user', 'admin'];
+        
+        // Obtener roles personalizados desde la base de datos
+        const CustomRole = require('./db/models/CustomRole');
+        const customRoles = await CustomRole.find().select('identifier');
+        const validCustomRoleIds = customRoles.map(role => role.identifier);
+        
+        // Combinar roles del sistema y personalizados
+        const allValidRoles = [...systemRoles, ...validCustomRoleIds];
+        
+        // Verificar que todos los roles sean válidos
+        const invalidRoles = roles.filter(r => !allValidRoles.includes(r));
+        if (invalidRoles.length > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Roles inválidos: ${invalidRoles.join(', ')}. Asegúrese de que todos los roles estén creados en el sistema.` 
+            });
+        }
+        
+        // Buscar el usuario
+        const User = require('./db/models/User');
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+        }
+        
+        // Actualizar roles
+        user.roles = roles;
+        
+        // Asegurar que el rol principal sea uno de los roles asignados
+        if (!roles.includes(user.role)) {
+            user.role = roles[0]; // Usar el primer rol como principal
+        }
+        
+        await user.save();
+        
+        res.json({ 
+            success: true, 
+            message: `Roles de ${user.username} actualizados a: ${roles.join(', ')}`,
+            user: {
+                id: user._id,
+                username: user.username,
+                role: user.role,
+                roles: user.roles
+            }
+        });
+    } catch (error) {
+        console.error('Error al actualizar roles de usuario:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Añadir un rol específico al usuario
+app.post('/api/admin/user/:userId/roles/:role', verifyAdminToken, async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const roleToAdd = req.params.role;
+        
+        // Validar que se proporcione un rol
+        if (!roleToAdd) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Debe proporcionar un rol válido' 
+            });
+        }
+        
+        // Los roles predeterminados del sistema
+        const systemRoles = ['user', 'admin'];
+        
+        // Obtener roles personalizados desde la base de datos
+        const CustomRole = require('./db/models/CustomRole');
+        const customRoles = await CustomRole.find().select('identifier');
+        const validCustomRoleIds = customRoles.map(role => role.identifier);
+        
+        // Combinar roles del sistema y personalizados
+        const allValidRoles = [...systemRoles, ...validCustomRoleIds];
+        
+        if (!allValidRoles.includes(roleToAdd)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Rol inválido: ${roleToAdd}. Asegúrese de que el rol esté creado en el sistema.` 
+            });
+        }
+        
+        // Buscar el usuario
+        const User = require('./db/models/User');
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+        }
+        
+        // Inicializar roles si no existe
+        if (!user.roles) {
+            user.roles = [];
+        }
+        
+        // Verificar si el rol ya está asignado
+        if (user.roles.includes(roleToAdd)) {
+            return res.json({ 
+                success: true, 
+                message: `El usuario ${user.username} ya tiene el rol ${roleToAdd}`,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    role: user.role,
+                    roles: user.roles
+                }
+            });
+        }
+        
+        // Añadir el rol
+        user.roles.push(roleToAdd);
+        await user.save();
+        
+        res.json({ 
+            success: true, 
+            message: `Rol ${roleToAdd} añadido a ${user.username}`,
+            user: {
+                id: user._id,
+                username: user.username,
+                role: user.role,
+                roles: user.roles
+            }
+        });
+    } catch (error) {
+        console.error('Error al añadir rol de usuario:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Eliminar un rol específico del usuario
+app.delete('/api/admin/user/:userId/roles/:role', verifyAdminToken, async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const roleToRemove = req.params.role;
+        
+        // Buscar el usuario
+        const User = require('./db/models/User');
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+        }
+        
+        // Verificar si el usuario tiene roles
+        if (!user.roles || user.roles.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'El usuario no tiene roles asignados' 
+            });
+        }
+        
+        // Verificar si el usuario sólo tiene un rol
+        if (user.roles.length === 1) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'No se puede eliminar el único rol del usuario' 
+            });
+        }
+        
+        // Verificar si el rol existe
+        if (!user.roles.includes(roleToRemove)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `El usuario no tiene el rol ${roleToRemove}` 
+            });
+        }
+        
+        // Eliminar el rol
+        user.roles = user.roles.filter(r => r !== roleToRemove);
+        
+        // Si el rol eliminado era el principal, actualizar el rol principal
+        if (user.role === roleToRemove) {
+            user.role = user.roles[0];
+        }
+        
+        await user.save();
+        
+        res.json({ 
+            success: true, 
+            message: `Rol ${roleToRemove} eliminado de ${user.username}`,
+            user: {
+                id: user._id,
+                username: user.username,
+                role: user.role,
+                roles: user.roles
+            }
+        });
+    } catch (error) {
+        console.error('Error al eliminar rol de usuario:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Obtener todos los roles disponibles
+app.get('/api/admin/roles', verifyAdminToken, async (req, res) => {
+    try {
+        // Roles predeterminados del sistema
+        const systemRoles = ['user', 'admin'];
+        
+        // Obtener roles personalizados
+        const CustomRole = require('./db/models/CustomRole');
+        const customRoles = await CustomRole.find().select('identifier name');
+        const customRoleIdentifiers = customRoles.map(role => role.identifier);
+        
+        // Combinar todos los roles
+        const allRoles = [...systemRoles, ...customRoleIdentifiers];
+        
+        // Enviar información completa para la interfaz
+        const formattedRoles = [
+            ...systemRoles.map(role => ({ identifier: role, name: role === 'user' ? 'Usuario' : 'Administrador', isSystem: true })),
+            ...customRoles.map(role => ({ identifier: role.identifier, name: role.name, isSystem: false }))
+        ];
+        
+        res.json({ 
+            success: true, 
+            roles: allRoles,
+            formattedRoles: formattedRoles
+        });
+    } catch (error) {
+        console.error('Error al obtener roles:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// --- RUTAS DE API PARA GESTIÓN DE ROLES PERSONALIZADOS ---
+
+// Obtener roles personalizados (usando POST para enviar la contraseña)
+app.post('/api/admin/custom-roles', async (req, res) => {
+    const { password } = req.body;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    try {
+        const roles = await roleController.getAllCustomRoles();
+        res.json({ success: true, roles });
+    } catch (error) {
+        console.error('Error al obtener roles personalizados:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Obtener un rol personalizado por ID
+app.post('/api/admin/custom-role/:id', async (req, res) => {
+    const { password } = req.body;
+    const { id } = req.params;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    try {
+        const role = await roleController.getCustomRoleById(id);
+        res.json({ success: true, role });
+    } catch (error) {
+        console.error(`Error al obtener rol personalizado con ID ${id}:`, error);
+        res.status(404).json({ success: false, message: error.message });
+    }
+});
+
+// Crear un nuevo rol personalizado
+app.post('/api/admin/custom-role', async (req, res) => {
+    const { password, name, identifier, description, color, isDefault } = req.body;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    try {
+        const role = await roleController.createCustomRole({
+            name,
+            identifier,
+            description,
+            color,
+            isDefault: isDefault || false
+        });
+        res.status(201).json({ success: true, role });
+    } catch (error) {
+        console.error('Error al crear rol personalizado:', error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// Actualizar un rol personalizado
+app.put('/api/admin/custom-role/:id', async (req, res) => {
+    const { password, name, identifier, description, color, isDefault } = req.body;
+    const { id } = req.params;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    try {
+        const role = await roleController.updateCustomRole(id, {
+            name,
+            identifier,
+            description,
+            color,
+            isDefault
+        });
+        res.json({ success: true, role });
+    } catch (error) {
+        console.error(`Error al actualizar rol personalizado con ID ${id}:`, error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// Actualizar solo el estado predeterminado de un rol
+app.put('/api/admin/custom-role/:id/default-status', async (req, res) => {
+    const { password, isDefault } = req.body;
+    const { id } = req.params;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    try {
+        const result = await roleController.updateDefaultStatus(id, isDefault);
+        res.json(result);
+    } catch (error) {
+        console.error(`Error al actualizar estado predeterminado del rol con ID ${id}:`, error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// Eliminar un rol personalizado
+app.delete('/api/admin/custom-role/:id', async (req, res) => {
+    const { password } = req.body;
+    const { id } = req.params;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    try {
+        const result = await roleController.deleteCustomRole(id);
+        res.json(result);
+    } catch (error) {
+        console.error(`Error al eliminar rol personalizado con ID ${id}:`, error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// Inicializar roles predeterminados
+app.post('/api/admin/custom-roles/initialize', async (req, res) => {
+    const { password } = req.body;
+    
+    if (password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    try {
+        const result = await roleController.initDefaultRoles();
+        res.json(result);
+    } catch (error) {
+        console.error('Error al inicializar roles predeterminados:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 });

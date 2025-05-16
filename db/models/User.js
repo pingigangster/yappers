@@ -52,11 +52,16 @@ const UserSchema = new mongoose.Schema({
         type: Date,
         required: false
     },
+    // Rol principal (para compatibilidad con código existente)
     role: {
         type: String,
-        enum: ['user', 'admin'],
         default: 'user'
     },
+    // Array de roles múltiples para el usuario
+    // Ahora soporta tanto los roles predefinidos como los identificadores de roles personalizados
+    roles: [{
+        type: String
+    }],
     lastActive: {
         type: Date,
         default: Date.now
@@ -82,6 +87,32 @@ UserSchema.pre('save', async function(next) {
         next(error);
     }
 });
+
+// Middleware para asegurar que el rol principal esté siempre en roles
+UserSchema.pre('save', function(next) {
+    // Asegurar que el array de roles exista
+    if (!this.roles) {
+        this.roles = [];
+    }
+    
+    // Asegurar que el rol principal esté en roles
+    if (this.role && !this.roles.includes(this.role)) {
+        this.roles.push(this.role);
+    }
+    
+    // Si roles está vacío, añadir user como predeterminado
+    if (this.roles.length === 0) {
+        this.roles = ['user'];
+        this.role = 'user';
+    }
+    
+    next();
+});
+
+// Método para comprobar si un usuario tiene un rol específico
+UserSchema.methods.hasRole = function(role) {
+    return this.roles.includes(role);
+};
 
 // Método para comparar contraseñas
 UserSchema.methods.comparePassword = async function(candidatePassword) {

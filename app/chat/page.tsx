@@ -28,11 +28,39 @@ const ChatMessage = ({ message, isCurrentUser }: { message: any; isCurrentUser: 
   );
 };
 
+// Componente para los botones de sala
+const RoomSelector = ({ rooms, currentRoom, onChangeRoom }: { 
+  rooms: string[], 
+  currentRoom: string, 
+  onChangeRoom: (room: string) => void 
+}) => {
+  return (
+    <div className="w-full bg-white shadow-md p-3 mb-4 rounded-lg">
+      <h3 className="text-md font-bold text-gray-700 mb-2">Seleccionar sala:</h3>
+      <div className="flex flex-wrap gap-2">
+        {rooms.map((room) => (
+          <button
+            key={room}
+            onClick={() => onChangeRoom(room)}
+            className={`px-4 py-2 rounded-md font-medium text-sm transition-all ${
+              currentRoom === room
+                ? 'bg-blue-600 text-white shadow-md transform scale-105'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            #{room}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function Chat() {
   const { user, loading: authLoading, logout } = useAuth();
   const { messages, loading: chatLoading, error: chatError, sendMessage, currentRoom, changeRoom, fetchMessages } = useChat();
   const [messageInput, setMessageInput] = useState('');
-  const [availableRooms] = useState(['general', 'soporte', 'casual']);
+  const [availableRooms] = useState(['general', 'soporte', 'casual', 'tecnología']);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [retryCount, setRetryCount] = useState(0);
   const router = useRouter();
@@ -87,7 +115,10 @@ export default function Chat() {
     <div className="flex flex-col h-screen bg-gray-100">
       {/* Barra superior */}
       <header className="bg-white shadow-sm py-4 px-6 flex justify-between items-center">
+        <div className="flex items-center space-x-2">
         <h1 className="text-xl font-semibold text-gray-800">ChatApp</h1>
+          <span className="text-sm text-gray-600 ml-2">Sala actual: <span className="font-medium text-blue-600">#{currentRoom}</span></span>
+        </div>
         <div className="flex items-center space-x-4">
           <div className="text-sm text-gray-600">
             Hola, <span className="font-medium">{user.name}</span>
@@ -101,34 +132,17 @@ export default function Chat() {
         </div>
       </header>
 
-      {/* Contenido principal */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Barra lateral */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-800">Salas</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {availableRooms.map((room) => (
-              <button
-                key={room}
-                onClick={() => handleRoomChange(room)}
-                className={`w-full text-left px-4 py-2 rounded-md mb-1 ${
-                  currentRoom === room
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                # {room}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Área de chat */}
-        <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col p-4 overflow-hidden">
+        {/* Selector de salas (visible en todas las pantallas) */}
+        <RoomSelector 
+          rooms={availableRooms} 
+          currentRoom={currentRoom} 
+          onChangeRoom={handleRoomChange} 
+        />
+
           {/* Mensajes */}
-          <div className="flex-1 overflow-y-auto p-4 bg-white">
+        <div className="flex-1 overflow-y-auto p-4 bg-white rounded-lg shadow-md">
             {chatLoading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-gray-500">Cargando mensajes...</div>
@@ -162,13 +176,13 @@ export default function Chat() {
           </div>
 
           {/* Formulario de entrada */}
-          <div className="p-4 border-t border-gray-200 bg-white">
+        <div className="p-4 mt-4 bg-white rounded-lg shadow-md">
             <form onSubmit={handleSendMessage} className="flex">
               <input
                 type="text"
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
-                placeholder="Escribe un mensaje..."
+              placeholder={`Escribe un mensaje en #${currentRoom}...`}
                 className="flex-1 border border-gray-300 rounded-l-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={chatLoading || !!chatError}
               />
@@ -180,7 +194,6 @@ export default function Chat() {
                 Enviar
               </button>
             </form>
-          </div>
         </div>
       </div>
     </div>

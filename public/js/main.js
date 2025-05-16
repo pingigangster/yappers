@@ -19,6 +19,73 @@ const modalContent = document.querySelector('.modal-content');
 const closeBtn = document.querySelector('.close-btn');
 const messageInput = document.getElementById('msg');
 const logoutBtn = document.getElementById('logout-btn');
+const currentRoomDisplay = document.getElementById('current-room');
+const roomButtons = document.querySelectorAll('.room-btn');
+
+// Variable para almacenar la sala actual
+let currentRoom = 'general';
+
+// Función para unirse a una sala
+function joinRoom(room) {
+    // Limpiar mensajes anteriores
+    chatMessages.innerHTML = '';
+    
+    // Actualizar variable global de sala actual
+    currentRoom = room;
+    
+    // Actualizar interfaz
+    if (currentRoomDisplay) {
+        currentRoomDisplay.textContent = room;
+    }
+    
+    // Actualizar botones de sala
+    if (roomButtons) {
+        roomButtons.forEach(button => {
+            if (button.dataset.room === room) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+    }
+    
+    // Destacar sala en la UI
+    const roomSelector = document.querySelector('.rooms-selector');
+    if (roomSelector) {
+        // Agregar una animación sutil al cambiar de sala
+        roomSelector.style.transition = 'all 0.3s ease';
+        roomSelector.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+            roomSelector.style.transform = 'scale(1)';
+        }, 300);
+    }
+    
+    // Mostrar notificación del cambio de sala
+    showTransferNotification(`Has cambiado a la sala: ${room}`, 'info');
+    
+    // Informar al servidor sobre el cambio de sala
+    socket.emit('joinRoom', { room });
+    
+    // Solicitar mensajes de la sala
+    socket.emit('getMessages', { room });
+    
+    console.log(`Unido a la sala: ${room}`);
+}
+
+// Configurar controladores de eventos para botones de sala
+document.addEventListener('DOMContentLoaded', () => {
+    const roomBtns = document.querySelectorAll('.room-btn');
+    if (roomBtns) {
+        roomBtns.forEach(button => {
+            button.addEventListener('click', () => {
+                const room = button.dataset.room;
+                if (room !== currentRoom) {
+                    joinRoom(room);
+                }
+            });
+        });
+    }
+});
 
 // Tamaño máximo para archivos multimedia (200 MB)
 const MAX_FILE_SIZE = 200 * 1024 * 1024;
@@ -434,15 +501,15 @@ socket.on('joinError', (data) => {
 // Escuchar por mensajes de texto del servidor
 socket.on('message', message => {
     console.log(message);
-    outputMessage(message);
-    scrollToBottom();
+        outputMessage(message);
+        scrollToBottom();
 });
 
 // Escuchar por mensajes con archivos multimedia
 socket.on('mediaMessage', message => {
     console.log('Archivo multimedia recibido:', message);
-    outputMediaMessage(message);
-    scrollToBottom();
+        outputMediaMessage(message);
+        scrollToBottom();
 });
 
 // Escuchar mensajes históricos (cargados desde la base de datos)
@@ -475,7 +542,7 @@ socket.on('historicalMessages', messages => {
             // Añadir mensaje al DOM sin mostrar todavía
             if (message.mediaId) { // <-- Usar mediaId para identificar mensajes multimedia
                 outputMediaMessage(message, false); // Pasar false para no hacer scroll todavía
-            } else {
+    } else {
                 outputMessage(message, false); // Pasar false para no hacer scroll todavía
             }
             
@@ -600,7 +667,8 @@ function processMessageQueue() {
     const tempMsgDiv = addTempMessage(message);
     
     // Emitir mensaje al servidor con callback para confirmar recepción
-    socket.emit('chatMessage', message, (response) => {
+    // CORREGIDO: Enviamos texto y sala como propiedades separadas, no como un objeto anidado
+    socket.emit('chatMessage', { text: message, room: currentRoom }, (response) => {
         if (response && response.success) {
             // Mensaje guardado correctamente.
             // El mensaje temporal ya fue añadido como 'confirmed' y sin reloj.
@@ -623,7 +691,7 @@ function processMessageQueue() {
         }
     });
     
-    console.log(`Mensaje enviado: ${message.substring(0, 20)}${message.length > 20 ? '...' : ''}`);
+    console.log(`Mensaje enviado en sala ${currentRoom}: ${message.substring(0, 20)}${message.length > 20 ? '...' : ''}`);
     
     // Actualizar tiempo del último mensaje
     lastMessageTime = Date.now();
@@ -1253,7 +1321,7 @@ function displayUsers(users) {
     }
 }
 
-// Mostrar mensaje de texto en el DOM
+// Mostrar mensaje de texto en el DOM (modificado para marcar sala actual)
 function outputMessage(message, doScroll = true) {
     const div = document.createElement('div');
     div.classList.add('message', 'fade-in');
@@ -1263,13 +1331,19 @@ function outputMessage(message, doScroll = true) {
         div.classList.add('self');
     }
     
+    // Marcar mensajes de la sala actual
+    if (message.room === currentRoom) {
+        div.classList.add('current-room-message');
+    }
+    
     const safeUsername = escapeHTML(message.username);
     const safeTime = escapeHTML(message.time);
     const safeText = escapeHTML(message.text);
+    const safeRoom = message.room ? `<span class="message-room">${escapeHTML(message.room)}</span>` : '';
 
     // Formatear el mensaje con datos sanitizados
     div.innerHTML = `
-        <p class="meta">${safeUsername} <span>${safeTime}</span></p>
+        <p class="meta">${safeUsername} ${safeRoom} <span>${safeTime}</span></p>
         <p class="text">${safeText}</p>
     `;
     
@@ -1286,7 +1360,7 @@ function outputMessage(message, doScroll = true) {
     }
 }
 
-// Mostrar mensaje con archivo multimedia en el DOM
+// Mostrar mensaje con archivo multimedia en el DOM (también modificado para marcar sala actual)
 function outputMediaMessage(message, doScroll = true) {
     const div = document.createElement('div');
     div.classList.add('message', 'fade-in');
@@ -1295,6 +1369,11 @@ function outputMediaMessage(message, doScroll = true) {
     const isSelf = message.username === localUsername;
     if (isSelf) {
         div.classList.add('self');
+    }
+    
+    // Marcar mensajes de la sala actual
+    if (message.room === currentRoom) {
+        div.classList.add('current-room-message');
     }
 
     // Crear el contenido multimedia en función del tipo
@@ -1395,9 +1474,11 @@ function outputMediaMessage(message, doScroll = true) {
         // Ya no se necesitan los argumentos isVideo ni mediaId aquí
     );
 
+    const safeRoom = message.room ? `<span class="message-room">${escapeHTML(message.room)}</span>` : '';
+
     div.innerHTML = `
         <div class="message-header">
-            <p class="meta">${message.username} <span>${message.time}</span></p>
+            <p class="meta">${message.username} ${safeRoom} <span>${message.time}</span></p>
             <div class="download-btn-container">
                 ${downloadButton}
             </div>
@@ -2455,3 +2536,324 @@ function initEmojiPicker() {
 
 // Inicializar el selector de emojis cuando el DOM esté cargado
 document.addEventListener('DOMContentLoaded', initEmojiPicker);
+
+// Escuchar mensajes específicos de la sala
+socket.on('roomMessages', messages => {
+    console.log('Evento roomMessages recibido del servidor. Cantidad:', messages ? messages.length : 'undefined');
+    updateLoadingProgress(40, `Cargando ${messages.length} mensajes de sala ${currentRoom}...`);
+    
+    // Limpiar los mensajes existentes para evitar duplicados
+    chatMessages.innerHTML = '';
+    
+    // Mostrar cada mensaje en la interfaz con un progreso
+    let processedCount = 0;
+    const batchSize = 10; // Procesar mensajes en lotes para mejorar rendimiento
+    const totalMessages = messages.length;
+    
+    function processBatch(startIdx) {
+        const endIdx = Math.min(startIdx + batchSize, totalMessages);
+        
+        for (let i = startIdx; i < endIdx; i++) {
+            const message = messages[i];
+            
+            // Para los mensajes históricos, comparamos el nombre de usuario en lugar del socket.id
+            // para determinar si el mensaje fue enviado por el usuario actual
+            if (message.username === localUsername) {
+                // Si el mensaje es del usuario actual, forzamos el userId a ser el socket.id actual
+                // para que se aplique el estilo "self"
+                message.userId = socket.id;
+            }
+            
+            // Añadir mensaje al DOM sin mostrar todavía
+            if (message.mediaId) { // <-- Usar mediaId para identificar mensajes multimedia
+                outputMediaMessage(message, false); // Pasar false para no hacer scroll todavía
+            } else {
+                outputMessage(message, false); // Pasar false para no hacer scroll todavía
+            }
+            
+            processedCount++;
+            
+            // Actualizar progreso
+            const percent = 40 + Math.floor((processedCount / totalMessages) * 40); // 40%-80%
+            updateLoadingProgress(percent, `Procesando mensajes... (${processedCount}/${totalMessages})`);
+        }
+        
+        // Si aún hay mensajes por procesar, programar el siguiente lote
+        if (endIdx < totalMessages) {
+            setTimeout(() => processBatch(endIdx), 0);
+        } else {
+            // Todos los mensajes han sido procesados
+            updateLoadingProgress(80, 'Finalizando carga de mensajes...');
+            messagesLoaded = true;
+            
+            // Hacer scroll hasta el final ahora que todos los mensajes están cargados
+            setTimeout(() => {
+                scrollToBottom();
+                checkAllLoaded();
+            }, 100);
+        }
+    }
+    
+    // Iniciar procesamiento por lotes (o mostrar mensaje si no hay mensajes)
+    if (totalMessages > 0) {
+        processBatch(0);
+    } else {
+        // No hay mensajes, actualizar interfaz y continuar
+        const emptyMessageDiv = document.createElement('div');
+        emptyMessageDiv.classList.add('empty-room-message');
+        emptyMessageDiv.innerHTML = `<p>No hay mensajes en la sala ${currentRoom}. ¡Sé el primero en escribir!</p>`;
+        chatMessages.appendChild(emptyMessageDiv);
+        
+        messagesLoaded = true;
+        checkAllLoaded();
+    }
+});
+
+// Asegurar que los botones de sala se muestren y funcionen correctamente
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Inicializando selectores de sala');
+    
+    // Verificar si los elementos de sala existen
+    const roomSelector = document.querySelector('.rooms-selector');
+    const currentRoomDisplay = document.getElementById('current-room');
+    const roomButtons = document.querySelectorAll('.room-btn');
+    
+    if (!roomSelector) {
+        console.error('No se encontró el selector de salas en el DOM');
+    } else {
+        console.log('Selector de salas encontrado');
+        
+        // Asegurar que sea visible
+        roomSelector.style.display = 'flex';
+        roomSelector.style.visibility = 'visible';
+        roomSelector.style.opacity = '1';
+    }
+    
+    if (!currentRoomDisplay) {
+        console.error('No se encontró el indicador de sala actual');
+    } else {
+        console.log('Indicador de sala actual encontrado');
+        // Establecer la sala general por defecto
+        currentRoomDisplay.textContent = currentRoom;
+    }
+    
+    if (!roomButtons || roomButtons.length === 0) {
+        console.error('No se encontraron botones de sala');
+    } else {
+        console.log(`Se encontraron ${roomButtons.length} botones de sala`);
+        
+        // Configurar los botones de sala
+        roomButtons.forEach(button => {
+            // Asegurar que el estilo sea correcto
+            button.style.display = 'inline-block';
+            
+            // Establecer el botón de la sala actual como activo
+            if (button.dataset.room === currentRoom) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+            
+            // Añadir o reforzar el event listener
+            button.addEventListener('click', function() {
+                const room = this.dataset.room;
+                console.log(`Click en botón de sala: ${room}`);
+                
+                if (room && room !== currentRoom) {
+                    joinRoom(room);
+                }
+            });
+        });
+    }
+    
+    // Solicitar mensajes de la sala inicial al cargar
+    if (socket && socket.connected) {
+        socket.emit('getMessages', { room: currentRoom });
+        console.log(`Solicitando mensajes de sala inicial: ${currentRoom}`);
+    }
+});
+
+// Escuchar actualizaciones de salas desde el servidor
+socket.on('roomsUpdated', (rooms) => {
+    console.log('Evento roomsUpdated recibido del servidor:', rooms);
+    
+    if (!Array.isArray(rooms) || rooms.length === 0) {
+        console.error('Se recibió un array de salas vacío o inválido');
+        return;
+    }
+    
+    // Obtener el contenedor de botones de sala
+    const roomButtons = document.querySelector('.room-buttons');
+    if (!roomButtons) {
+        console.error('No se encontró el contenedor de botones de sala');
+        return;
+    }
+    
+    // Guardar la sala actual seleccionada
+    const activeRoom = currentRoom;
+    
+    // Vaciar el contenedor de botones (pero mantener los predeterminados)
+    const predefinedRooms = ['general']; // Ahora solo 'general' es predefinida
+    const customButtons = Array.from(roomButtons.querySelectorAll('.room-btn')).filter(
+        btn => !predefinedRooms.includes(btn.dataset.room) && btn.classList.contains('custom-room')
+    );
+    customButtons.forEach(btn => btn.remove());
+    
+    // Añadir los botones para las nuevas salas
+    rooms.forEach(room => {
+        // Si no es una sala predefinida, agregar un nuevo botón
+        if (!predefinedRooms.includes(room.slug)) {
+            // Verificar si el botón ya existe
+            const existingButton = roomButtons.querySelector(`.room-btn[data-room="${room.slug}"]`);
+            if (!existingButton) {
+                const button = document.createElement('button');
+                button.classList.add('room-btn', 'custom-room');
+                button.dataset.room = room.slug;
+                button.textContent = room.name;
+                
+                // Si es la sala activa, marcarla como activa
+                if (room.slug === activeRoom) {
+                    button.classList.add('active');
+                }
+                
+                // Agregar evento de clic
+                button.addEventListener('click', function() {
+                    if (room.slug !== currentRoom) {
+                        joinRoom(room.slug);
+                    }
+                });
+                
+                roomButtons.appendChild(button);
+            }
+        }
+    });
+    
+    showTransferNotification('Lista de salas actualizada', 'info');
+});
+
+// Solicitar salas disponibles al iniciar
+function loadAvailableRooms() {
+    fetch('/api/rooms')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al obtener salas');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && Array.isArray(data.rooms)) {
+                console.log('Salas obtenidas de la API:', data.rooms);
+                
+                // Procesar salas directamente
+                const rooms = data.rooms;
+                
+                // Obtener el contenedor de botones de sala
+                const roomButtons = document.querySelector('.room-buttons');
+                if (!roomButtons) {
+                    console.error('No se encontró el contenedor de botones de sala');
+                    return;
+                }
+                
+                // Guardar la sala actual seleccionada
+                const activeRoom = currentRoom;
+                
+                // Vaciar el contenedor de botones (pero mantener los predeterminados)
+                const predefinedRooms = ['general']; // Ahora solo 'general' es predefinida
+                const customButtons = Array.from(roomButtons.querySelectorAll('.room-btn')).filter(
+                    btn => !predefinedRooms.includes(btn.dataset.room) && btn.classList.contains('custom-room')
+                );
+                customButtons.forEach(btn => btn.remove());
+                
+                // Añadir los botones para las nuevas salas
+                rooms.forEach(room => {
+                    // Si no es una sala predefinida, agregar un nuevo botón
+                    if (!predefinedRooms.includes(room.slug)) {
+                        // Verificar si el botón ya existe
+                        const existingButton = roomButtons.querySelector(`.room-btn[data-room="${room.slug}"]`);
+                        if (!existingButton) {
+                            const button = document.createElement('button');
+                            button.classList.add('room-btn', 'custom-room');
+                            button.dataset.room = room.slug;
+                            button.textContent = room.name;
+                            
+                            // Si es la sala activa, marcarla como activa
+                            if (room.slug === activeRoom) {
+                                button.classList.add('active');
+                            }
+                            
+                            // Agregar evento de clic
+                            button.addEventListener('click', function() {
+                                if (room.slug !== currentRoom) {
+                                    joinRoom(room.slug);
+                                }
+                            });
+                            
+                            roomButtons.appendChild(button);
+                        }
+                    }
+                });
+                
+                showTransferNotification('Lista de salas actualizada', 'info');
+            }
+        })
+        .catch(error => {
+            console.error('Error al cargar salas:', error);
+        });
+}
+
+// Agregar llamada a cargar salas disponibles al inicio
+document.addEventListener('DOMContentLoaded', function() {
+    // Código existente...
+    
+    // Cargar salas disponibles
+    loadAvailableRooms();
+    
+    // ... código existente
+});
+
+// Función para forzar la sincronización de salas desde la consola del navegador
+window.forceSyncRooms = function() {
+    console.log('Forzando sincronización de salas...');
+    
+    // Obtener el contenedor de botones de sala
+    const roomButtons = document.querySelector('.room-buttons');
+    if (!roomButtons) {
+        console.error('No se encontró el contenedor de botones de sala');
+        return false;
+    }
+    
+    // Eliminar todos los botones excepto 'general'
+    const allRoomButtons = Array.from(roomButtons.querySelectorAll('.room-btn'));
+    allRoomButtons.forEach(btn => {
+        if (btn.dataset.room !== 'general') {
+            console.log(`Eliminando botón de sala: ${btn.dataset.room}`);
+            btn.remove();
+        }
+    });
+    
+    // Asegurar que 'general' está seleccionada
+    const generalButton = roomButtons.querySelector('.room-btn[data-room="general"]');
+    if (generalButton) {
+        generalButton.classList.add('active');
+        
+        // Cambiar a la sala general si no estamos en ella
+        if (currentRoom !== 'general') {
+            joinRoom('general');
+        }
+    }
+    
+    // Solicitar la lista de salas al servidor para mantener sincronización
+    fetch('/api/rooms')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && Array.isArray(data.rooms)) {
+                console.log('Salas actualizadas desde el servidor:', data.rooms);
+            }
+        })
+        .catch(error => {
+            console.error('Error al obtener salas:', error);
+        });
+    
+    showTransferNotification('Salas sincronizadas correctamente', 'success');
+    return true;
+};

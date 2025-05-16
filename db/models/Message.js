@@ -25,6 +25,12 @@ const MessageSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    // Campo para la sala (nuevo)
+    room: {
+        type: String,
+        default: 'general',
+        required: false
+    },
     // Campos para archivos multimedia
     media: {
         type: String,
@@ -74,10 +80,19 @@ const MessageSchema = new mongoose.Schema({
 MessageSchema.index({ createdAt: -1 });
 MessageSchema.index({ userId: 1 });
 MessageSchema.index({ uuid: 1 }, { unique: true });
+MessageSchema.index({ room: 1 }); // Nuevo índice para búsquedas por sala
 
 // Método para obtener los mensajes más recientes
 MessageSchema.statics.getRecentMessages = async function(limit = 50) {
     return this.find({})
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+};
+
+// Método para obtener mensajes por sala
+MessageSchema.statics.getMessagesByRoom = async function(room = 'general', limit = 50) {
+    return this.find({ room: room })
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean();
