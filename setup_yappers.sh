@@ -383,18 +383,70 @@ RUN apt-get update && apt-get install -y git netcat-traditional curl wget python
 RUN git clone https://github.com/pingigangster/yappers.git . && \\
     rm -rf .git
 
+# Hacer copia de seguridad del server.js original
+RUN cp server.js server.js.original
+
+# Crear la parte corregida de server.js (sección con error)
+RUN cat > server.js.fixed << "EOL"
+// Cargar variables de entorno
+require('dotenv').config({ path: '.env.local' });
+
+const path = require('path');
+const http = require('http');
+const express = require('express');
+const socketio = require('socket.io');
+const moment = require('moment');
+const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
+const passport = require('passport');
+const session = require('express-session');
+const mongoose = require('mongoose'); // Asegurarse que mongoose está importado
+
+// Configuración de Passport
+require('./config/passport');
+
+// Conexión a MongoDB
+const connectDB = require('./db/connection');
+const { userController, messageController, authController, roomController, roleController } = require('./db/controllers');
+
+// Configuración
+const MAX_MESSAGE_LENGTH = 200; // Límite de caracteres para mensajes
+const ADMIN_PASSWORD = "patatata123"; // Contraseña de administrador
+const JWT_SECRET = 'tu_secreto_secreto_secreto'; // Reemplaza con tu secreto real
+
+const app = express();
+const server = http.createServer(app);
+
+// Indicar a Express que confíe en la cabecera X-Forwarded-Proto de Cloudflare
+// El '1' significa que confíe en el primer proxy delante de él.
+app.set('trust proxy', 1);
+
+// Opciones para Socket.io
+const socketioOptions = {
+    maxHttpBufferSize: 200e6, // Aumentar a 200 MB para permitir archivos multimedia más grandes
+    pingTimeout: 60000, // Aumentar el tiempo de espera para detectar desconexiones (60 segundos)
+    cors: {
+        // Permitir conexiones desde la URL del túnel (obtenida de variable de entorno) o cualquier origen si no está definida.
+        origin: process.env.CLOUDFLARE_TUNNEL_URL || "*",
+        methods: ["GET", "POST"]
+    }
+};
+
+// Inicializar Socket.io con las opciones
+const io = socketio(server, socketioOptions);
+EOL
+
+# Reemplazar la parte con error del archivo original y crear la versión final
+RUN sed -i '1,45d' server.js.original && \\
+    cat server.js.fixed server.js.original > server.js && \\
+    rm server.js.original server.js.fixed
+
 # Instalar bcrypt y bcryptjs (instalar ambos para evitar problemas de dependencias)
 RUN npm install bcrypt bcryptjs --save
 
 # Reemplazar todas las importaciones de 'bcrypt' por 'bcryptjs' en el código
 RUN find . -type f -name "*.js" -exec sed -i 's/require(["\x27]bcrypt["\x27])/require("bcryptjs")/g' {} \\; && \\
     find . -type f -name "*.js" -exec sed -i "s/from ['\"]bcrypt['\"]/from 'bcryptjs'/g" {} \\;
-
-# Parche para corregir el error de sintaxis en server.js (línea 42)
-RUN sed -i '33,53s/const io = socketio(server, {/const socketioOptions = {\n/g' server.js && \\
-    sed -i '33,53s/    maxHttpBufferSize: 200e6,/    maxHttpBufferSize: 200e6,\n/g' server.js && \\
-    sed -i '33,53s/    pingTimeout: 60000,/    pingTimeout: 60000,\n/g' server.js && \\
-    sed -i '33,53s/});/};\n\nconst io = socketio(server, socketioOptions);/g' server.js
 
 # Parche para manejar errores de conexión a MongoDB sin interrumpir la aplicación
 RUN find . -type f -name "server.js" -exec sed -i 's/mongoose.connect/console.log("Intentando conectar a MongoDB (intento 1\/5)...");\ntry {\n  mongoose.connect/g' {} \\; && \\
@@ -416,11 +468,8 @@ RUN chmod +x /wait-for-it.sh
 # Exponer el puerto que usa la aplicación
 EXPOSE ${APP_PORT}
 
-# Copiar script de parche
-COPY patch-server.js /app/
-
 # Iniciar la aplicación
-CMD ["/bin/sh", "-c", "/wait-for-it.sh mongo:27017 && node /app/patch-server.js && npm start"]
+CMD ["/bin/sh", "-c", "/wait-for-it.sh mongo:27017 && npm start"]
 EOF
 
 # Crear wait-for-it.sh
@@ -607,57 +656,6 @@ exit 0
 EOF
 chmod +x init-letsencrypt.sh
 
-# Crear script de parche para corregir server.js
-cat > patch-server.js << EOF
-#!/usr/bin/env node
-
-// Script para corregir automáticamente el error de sintaxis en server.js
-const fs = require('fs');
-const path = require('path');
-
-console.log('Aplicando parche para corregir server.js...');
-
-try {
-    // Leer el archivo original
-    let content = fs.readFileSync('./server.js', 'utf8');
-    
-    // Buscar la sección problemática (alrededor de la línea 42)
-    // Utilizamos una expresión regular para encontrar la configuración de socketio
-    const socketioConfigRegex = /const io = socketio\(server, \{[\s\S]*?}\);/m;
-    
-    if (socketioConfigRegex.test(content)) {
-        console.log('Encontrada la sección problemática, aplicando corrección...');
-        
-        // Reemplazar con la versión corregida
-        const correctedContent = content.replace(
-            socketioConfigRegex,
-            \`// Opciones para Socket.io
-const socketioOptions = {
-    maxHttpBufferSize: 200e6, // Aumentar a 200 MB para permitir archivos multimedia más grandes
-    pingTimeout: 60000, // Aumentar el tiempo de espera para detectar desconexiones (60 segundos)
-    cors: {
-        // Permitir conexiones desde la URL del túnel (obtenida de variable de entorno) o cualquier origen si no está definida.
-        origin: process.env.CLOUDFLARE_TUNNEL_URL || "*",
-        methods: ["GET", "POST"]
-    }
-};
-
-// Inicializar Socket.io con las opciones
-const io = socketio(server, socketioOptions);\`
-        );
-        
-        // Guardar el archivo corregido
-        fs.writeFileSync('./server.js', correctedContent, 'utf8');
-        console.log('¡Parche aplicado con éxito!');
-    } else {
-        console.log('No se encontró la sección problemática. El archivo podría estar ya corregido o tener un formato diferente.');
-    }
-} catch (error) {
-    console.error('Error al aplicar el parche:', error);
-    process.exit(1);
-}
-EOF
-
 # Exportar variables para docker compose
 export APP_PORT
 export MONGO_URI="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/${MONGO_DB}?authSource=admin"
@@ -693,7 +691,7 @@ services:
       app:
         condition: service_started
       mongo:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
@@ -736,7 +734,7 @@ services:
       - "${APP_PORT}"
     depends_on:
       mongo:
-        condition: service_healthy
+        condition: service_started
     networks:
       - app-network
     restart: always
@@ -762,12 +760,14 @@ services:
     networks:
       - app-network
     restart: always
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+    # Healthcheck desactivado ya que puede causar problemas en algunas versiones
+    # Si necesitas activarlo, descomenta estas líneas y ajústalas según tu versión de MongoDB
+    # healthcheck:
+    #   test: ["CMD", "mongo", "--eval", "db.stats()"]
+    #   start_period: 60s
+    #   interval: 20s
+    #   timeout: 10s
+    #   retries: 3
 
 networks:
   app-network:
