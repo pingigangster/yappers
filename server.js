@@ -21,7 +21,14 @@ const { userController, messageController, authController, roomController, roleC
 
 // Configuración
 const MAX_MESSAGE_LENGTH = 200; // Límite de caracteres para mensajes
-const ADMIN_PASSWORD = "patatata123"; // Contraseña de administrador
+
+// Contraseña de administrador desde variables de entorno
+let ADMIN_PASSWORD = process.env.ADMIN_PASS;
+if (!ADMIN_PASSWORD) {
+    console.warn('ADVERTENCIA: Variable ADMIN_PASS no definida en .env.local. Configurando valor predeterminado para desarrollo.');
+    ADMIN_PASSWORD = "patatata123"; // Valor por defecto SOLO si no hay variable de entorno
+}
+
 const JWT_SECRET = 'tu_secreto_secreto_secreto'; // Reemplaza con tu secreto real
 
 const app = express();
@@ -130,11 +137,13 @@ function authMiddleware(req, res, next) {
 const verifyAdminToken = (req, res, next) => {
     const { password } = req.body;
     
-    if (password !== ADMIN_PASSWORD) {
-        return res.status(401).json({ success: false, message: 'No autorizado' });
+    // Usar ÚNICAMENTE la contraseña de .env.local
+    if (password === ADMIN_PASSWORD) {
+        return next();
     }
     
-    next();
+    console.log(`Intento de acceso fallido con contraseña: ${password}`);
+    return res.status(401).json({ success: false, message: 'No autorizado' });
 };
 
 // Middleware para rol de administrador
@@ -185,6 +194,13 @@ connectWithRetry().then(async (connected) => {
         } catch (cleanupError) {
             console.error('Error durante la limpieza inicial de usuarios:', cleanupError);
         }
+    }
+    
+    // Mostrar información sobre la contraseña del administrador
+    if (process.env.ADMIN_PASS) {
+        console.log(`Contraseña de administrador configurada desde .env.local: "${process.env.ADMIN_PASS}"`);
+    } else {
+        console.log('ADVERTENCIA: No se encontró la variable ADMIN_PASS en .env.local. Usando valor por defecto.');
     }
     
     // Poner el servidor a escuchar DESPUÉS de intentar la conexión y limpieza
@@ -441,6 +457,17 @@ app.use((req, res, next) => {
 
 // Ruta específica para servir la página principal /
 app.get('/', (req, res) => {
+    // Verificar si hay un token en la cookie
+    const token = req.cookies && req.cookies.token;
+    
+    if (token) {
+        // Si hay un token, redirigir a /chat sin verificarlo
+        // La página /chat se encargará de verificar si el token es válido
+        console.log('Token encontrado en la ruta principal, redirigiendo a /chat');
+        return res.redirect('/chat');
+    }
+    
+    // Si no hay token, mostrar la página de inicio
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -907,50 +934,14 @@ app.get('/admin', (req, res) => {
 
 // API para el panel de administrador
 app.post('/api/admin/login', async (req, res) => {
-    // Siempre permitir login para debugging
-    return res.status(200).json({ success: true, message: 'Acceso correcto' });
-    
-    // Si se proporciona la contraseña antigua, usarla
+    // Verificar la contraseña del administrador
     if (req.body.password === ADMIN_PASSWORD) {
+        console.log('Login de administrador exitoso con contraseña correcta');
         res.status(200).json({ success: true, message: 'Acceso correcto' });
     } else {
-        // Si no, usar sistema de autenticación nuevo
-        try {
-            const { email, password } = req.body;
-            
-            if (!email || !password) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Email y contraseña son obligatorios' 
-                });
-            }
-            
-            const result = await authController.login(email, password);
-            
-            // Verificar si es administrador
-            if (result.user.role !== 'admin') {
-                return res.status(403).json({ 
-                    success: false, 
-                    message: 'No tienes permisos de administrador' 
-                });
-            }
-            
-            // Establecer cookie con el token JWT
-            res.cookie('token', result.token, {
-                httpOnly: true,
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-                // 'secure' ahora funcionará correctamente detrás del túnel cuando NODE_ENV sea 'production'
-                secure: process.env.NODE_ENV === 'production'
-            });
-            
-            return res.status(200).json({
-                success: true,
-                user: result.user
-            });
-        } catch (error) {
-            console.error('Error en login de administrador:', error);
-            return res.status(401).json({ success: false, message: error.message });
-        }
+        // Si la contraseña no es correcta, responder con error
+        console.log('Intento de login de administrador fallido con contraseña incorrecta');
+        return res.status(401).json({ success: false, message: 'Contraseña de administrador incorrecta' });
     }
 });
 
@@ -962,10 +953,8 @@ app.post('/api/admin/users', (req, res) => {
     console.log('Password recibida:', password);
     console.log('Password esperada:', ADMIN_PASSWORD);
     
-    // Hardcodear a true para asegurar que funciona mientras depuramos
-    const authSuccess = true; // password === ADMIN_PASSWORD;
-    
-    if (!authSuccess) {
+    // Validar la contraseña usando el valor de ADMIN_PASSWORD
+    if (password !== ADMIN_PASSWORD) {
         console.log('Autenticación fallida en /api/admin/users');
         return res.status(401).json({ success: false, message: 'No autorizado' });
     }
@@ -1143,28 +1132,30 @@ app.post('/api/admin/messages/delete', (req, res) => {
 app.post('/api/admin/stats', (req, res) => {
     const { password } = req.body;
     
-    if (password !== ADMIN_PASSWORD) {
+    // Usar ÚNICAMENTE la contraseña de .env.local
+    if (password === ADMIN_PASSWORD) {
+        Promise.all([
+            messageController.getMessageCount(),
+            userController.getUserCount(),
+            messageController.getRecentMessages(1)
+        ])
+        .then(([messageCount, userCount, lastMessage]) => {
+            res.status(200).json({ 
+                success: true, 
+                stats: {
+                    messageCount,
+                    userCount,
+                    lastMessageTime: lastMessage.length > 0 ? lastMessage[0].createdAt : null
+                }
+            });
+        })
+        .catch(error => {
+            res.status(500).json({ success: false, message: 'Error al obtener estadísticas', error: error.message });
+        });
+    } else {
+        console.log(`Intento de acceso fallido a /api/admin/stats con contraseña: ${password}`);
         return res.status(401).json({ success: false, message: 'No autorizado' });
     }
-    
-    Promise.all([
-        messageController.getMessageCount(),
-        userController.getUserCount(),
-        messageController.getRecentMessages(1)
-    ])
-    .then(([messageCount, userCount, lastMessage]) => {
-        res.status(200).json({ 
-            success: true, 
-            stats: {
-                messageCount,
-                userCount,
-                lastMessageTime: lastMessage.length > 0 ? lastMessage[0].createdAt : null
-            }
-        });
-    })
-    .catch(error => {
-        res.status(500).json({ success: false, message: 'Error al obtener estadísticas', error: error.message });
-    });
 });
 
 // Obtener mensajes recientes (requiere autenticación)
@@ -1174,10 +1165,8 @@ app.post('/api/admin/messages', (req, res) => {
     console.log('Recibida petición a /api/admin/messages');
     console.log('Password recibida:', password);
     
-    // Hardcodear a true para asegurar que funciona mientras depuramos
-    const authSuccess = true; // password === ADMIN_PASSWORD;
-    
-    if (!authSuccess) {
+    // Validar la contraseña usando el valor de ADMIN_PASSWORD
+    if (password !== ADMIN_PASSWORD) {
         console.log('Autenticación fallida en /api/admin/messages');
         return res.status(401).json({ success: false, message: 'No autorizado' });
     }
@@ -2035,7 +2024,9 @@ app.get('/api/files/:id/info', async (req, res) => {
 app.post('/api/admin/connected', (req, res) => {
     const { password } = req.body;
     
+    // Usar ÚNICAMENTE la contraseña de .env.local
     if (password !== ADMIN_PASSWORD) {
+        console.log(`Intento de acceso fallido a /api/admin/connected con contraseña: ${password}`);
         return res.status(401).json({ success: false, message: 'No autorizado' });
     }
     
@@ -2052,28 +2043,30 @@ app.post('/api/admin/connected', (req, res) => {
 app.post('/api/admin/stats', (req, res) => {
     const { password } = req.body;
     
-    if (password !== ADMIN_PASSWORD) {
+    // Usar ÚNICAMENTE la contraseña de .env.local
+    if (password === ADMIN_PASSWORD) {
+        Promise.all([
+            messageController.getMessageCount(),
+            userController.getUserCount(),
+            messageController.getRecentMessages(1)
+        ])
+        .then(([messageCount, userCount, lastMessage]) => {
+            res.status(200).json({ 
+                success: true, 
+                stats: {
+                    messageCount,
+                    userCount,
+                    lastMessageTime: lastMessage.length > 0 ? lastMessage[0].createdAt : null
+                }
+            });
+        })
+        .catch(error => {
+            res.status(500).json({ success: false, message: 'Error al obtener estadísticas', error: error.message });
+        });
+    } else {
+        console.log(`Intento de acceso fallido a /api/admin/stats con contraseña: ${password}`);
         return res.status(401).json({ success: false, message: 'No autorizado' });
     }
-    
-    Promise.all([
-        messageController.getMessageCount(),
-        userController.getUserCount(),
-        messageController.getRecentMessages(1)
-    ])
-    .then(([messageCount, userCount, lastMessage]) => {
-        res.status(200).json({ 
-            success: true, 
-            stats: {
-                messageCount,
-                userCount,
-                lastMessageTime: lastMessage.length > 0 ? lastMessage[0].createdAt : null
-            }
-        });
-    })
-    .catch(error => {
-        res.status(500).json({ success: false, message: 'Error al obtener estadísticas', error: error.message });
-    });
 });
 
 // API para el panel de administrador - Borrar un usuario por ID (método DELETE)
@@ -2764,16 +2757,18 @@ app.get('/api/admin/roles', verifyAdminToken, async (req, res) => {
 app.post('/api/admin/custom-roles', async (req, res) => {
     const { password } = req.body;
     
-    if (password !== ADMIN_PASSWORD) {
+    // Usar ÚNICAMENTE la contraseña de .env.local
+    if (password === ADMIN_PASSWORD) {
+        try {
+            const roles = await roleController.getAllCustomRoles();
+            res.json({ success: true, roles });
+        } catch (error) {
+            console.error('Error al obtener roles personalizados:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    } else {
+        console.log(`Intento de acceso fallido a /api/admin/custom-roles con contraseña: ${password}`);
         return res.status(401).json({ success: false, message: 'No autorizado' });
-    }
-    
-    try {
-        const roles = await roleController.getAllCustomRoles();
-        res.json({ success: true, roles });
-    } catch (error) {
-        console.error('Error al obtener roles personalizados:', error);
-        res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -2782,7 +2777,9 @@ app.post('/api/admin/custom-role/:id', async (req, res) => {
     const { password } = req.body;
     const { id } = req.params;
     
+    // Usar ÚNICAMENTE la contraseña de .env.local
     if (password !== ADMIN_PASSWORD) {
+        console.log(`Intento de acceso fallido a /api/admin/custom-role/${id} con contraseña: ${password}`);
         return res.status(401).json({ success: false, message: 'No autorizado' });
     }
     
@@ -2882,15 +2879,17 @@ app.delete('/api/admin/custom-role/:id', async (req, res) => {
 app.post('/api/admin/custom-roles/initialize', async (req, res) => {
     const { password } = req.body;
     
-    if (password !== ADMIN_PASSWORD) {
+    // Usar ÚNICAMENTE la contraseña de .env.local
+    if (password === ADMIN_PASSWORD) {
+        try {
+            const result = await roleController.initDefaultRoles();
+            res.json(result);
+        } catch (error) {
+            console.error('Error al inicializar roles predeterminados:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    } else {
+        console.log(`Intento de acceso fallido a /api/admin/custom-roles/initialize con contraseña: ${password}`);
         return res.status(401).json({ success: false, message: 'No autorizado' });
-    }
-    
-    try {
-        const result = await roleController.initDefaultRoles();
-        res.json(result);
-    } catch (error) {
-        console.error('Error al inicializar roles predeterminados:', error);
-        res.status(500).json({ success: false, message: error.message });
     }
 });

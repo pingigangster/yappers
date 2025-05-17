@@ -1154,8 +1154,13 @@
                 setLoading(loginForm, true);
                 console.log("Verificando contraseña...");
                 
-                // Simulación de login, ya que la API de login real no está siendo usada para admin
-                if (password === 'patatata123') { // Usar la contraseña de admin definida
+                // Usar la API de login real para administrador
+                const loginResponse = await fetchAPI('/api/admin/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ password: password })
+                });
+                
+                if (loginResponse.success) {
                     console.log("Contraseña correcta");
                     adminPassword = password;
                     localStorage.setItem('adminSession', adminPassword);

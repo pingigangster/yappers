@@ -56,6 +56,7 @@ MONGO_PASSWORD=""
 MONGO_DB=""
 JWT_SECRET=""
 SESSION_SECRET=""
+ADMIN_PASS=""
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
 GOOGLE_CALLBACK_URL=""
@@ -179,6 +180,12 @@ JWT_DEFAULT=$(generar_clave_segura)
 SESSION_DEFAULT=$(generar_clave_segura)
 pedir_valor "JWT Secret (se generará automáticamente una clave segura)" "$JWT_DEFAULT" JWT_SECRET
 pedir_valor "Session Secret (se generará automáticamente una clave segura)" "$SESSION_DEFAULT" SESSION_SECRET
+
+# Solicitar contraseña de administrador
+printf "\n${AMARILLO}--- Configuración del Panel de Administración ---${NC}\n"
+printf "${AZUL}Esta contraseña se usará para acceder al panel de administración en /admin${NC}\n"
+ADMIN_PASS_DEFAULT="patatata123"
+pedir_valor "Contraseña de administrador" "$ADMIN_PASS_DEFAULT" ADMIN_PASS false
 
 # Google OAuth
 printf "\n${AMARILLO}--- Configuración de Google OAuth ---${NC}\n"
@@ -368,7 +375,7 @@ EXPOSE 443
 CMD ["/bin/sh", "-c", "/init-letsencrypt.sh && nginx -g 'daemon off;'"]
 EOF
 
-# Crear Dockerfile.app
+# Crear Dockerfile.app simplificado
 cat > Dockerfile.app << EOF
 FROM node:18-slim
 
@@ -383,77 +390,11 @@ RUN apt-get update && apt-get install -y git netcat-traditional curl wget python
 RUN git clone https://github.com/pingigangster/yappers.git . && \\
     rm -rf .git
 
-# Hacer copia de seguridad del server.js original
-RUN cp server.js server.js.original
-
-# Crear la parte corregida de server.js (sección con error)
-RUN cat > server.js.fixed << "EOL"
-// Cargar variables de entorno
-require('dotenv').config({ path: '.env.local' });
-
-const path = require('path');
-const http = require('http');
-const express = require('express');
-const socketio = require('socket.io');
-const moment = require('moment');
-const cookieParser = require('cookie-parser');
-const jwt = require('jsonwebtoken');
-const passport = require('passport');
-const session = require('express-session');
-const mongoose = require('mongoose'); // Asegurarse que mongoose está importado
-
-// Configuración de Passport
-require('./config/passport');
-
-// Conexión a MongoDB
-const connectDB = require('./db/connection');
-const { userController, messageController, authController, roomController, roleController } = require('./db/controllers');
-
-// Configuración
-const MAX_MESSAGE_LENGTH = 200; // Límite de caracteres para mensajes
-const ADMIN_PASSWORD = "patatata123"; // Contraseña de administrador
-const JWT_SECRET = 'tu_secreto_secreto_secreto'; // Reemplaza con tu secreto real
-
-const app = express();
-const server = http.createServer(app);
-
-// Indicar a Express que confíe en la cabecera X-Forwarded-Proto de Cloudflare
-// El '1' significa que confíe en el primer proxy delante de él.
-app.set('trust proxy', 1);
-
-// Opciones para Socket.io
-const socketioOptions = {
-    maxHttpBufferSize: 200e6, // Aumentar a 200 MB para permitir archivos multimedia más grandes
-    pingTimeout: 60000, // Aumentar el tiempo de espera para detectar desconexiones (60 segundos)
-    cors: {
-        // Permitir conexiones desde la URL del túnel (obtenida de variable de entorno) o cualquier origen si no está definida.
-        origin: process.env.CLOUDFLARE_TUNNEL_URL || "*",
-        methods: ["GET", "POST"]
-    }
-};
-
-// Inicializar Socket.io con las opciones
-const io = socketio(server, socketioOptions);
-EOL
-
-# Reemplazar la parte con error del archivo original y crear la versión final
-RUN sed -i '1,45d' server.js.original && \\
-    cat server.js.fixed server.js.original > server.js && \\
-    rm server.js.original server.js.fixed
-
-# Instalar bcrypt y bcryptjs (instalar ambos para evitar problemas de dependencias)
-RUN npm install bcrypt bcryptjs --save
-
-# Reemplazar todas las importaciones de 'bcrypt' por 'bcryptjs' en el código
-RUN find . -type f -name "*.js" -exec sed -i 's/require(["\x27]bcrypt["\x27])/require("bcryptjs")/g' {} \\; && \\
-    find . -type f -name "*.js" -exec sed -i "s/from ['\"]bcrypt['\"]/from 'bcryptjs'/g" {} \\;
-
-# Parche para manejar errores de conexión a MongoDB sin interrumpir la aplicación
-RUN find . -type f -name "server.js" -exec sed -i 's/mongoose.connect/console.log("Intentando conectar a MongoDB (intento 1\/5)...");\ntry {\n  mongoose.connect/g' {} \\; && \\
-    find . -type f -name "server.js" -exec sed -i 's/mongoose.connection.on("error", (error) => {/mongoose.connection.on("error", (error) => {\n    console.log(`Error al conectar MongoDB (intento \${currentAttempt}\/\${maxAttempts}): \${error}`);\n    if (currentAttempt < maxAttempts) {\n      console.log("Reintentando en 5 segundos...");\n      setTimeout(() => {\n        currentAttempt++;\n        console.log(`Intentando conectar a MongoDB (intento \${currentAttempt}\/\${maxAttempts})...`);\n        mongoose.connect(process.env.MONGO_URI, options).catch(err => {\n          console.log("Mongoose error de conexión:", err);\n        });\n      }, 5000);\n    } else {\n      console.log("Se agotaron los intentos de conexión a MongoDB");\n      console.log("La aplicación continuará funcionando sin persistencia de datos");\n      startServer();\n    }\n/g' {} \\; && \\
-    find . -type f -name "server.js" -exec sed -i '1s/^/const maxAttempts = 5;\nlet currentAttempt = 1;\n\n/' {} \\; && \\
-    find . -type f -name "server.js" -exec sed -i 's/const app = express();/const app = express();\n\nfunction startServer() {\n  const PORT = process.env.PORT || 3000;\n  const server = app.listen(PORT, "0.0.0.0", () => {\n    console.log(`Servidor ejecutándose en puerto \${PORT} y escuchando en 0.0.0.0`);\n  });\n}/g' {} \\; && \\
-    find . -type f -name "server.js" -exec sed -i 's/app.listen(/mongoose.connection.once("open", () => {\n  console.log("Conexión exitosa a MongoDB");\n  startServer();\n});\n\n\/\/ Esta línea se comenta para usar la función startServer\n\/\/ app.listen(/g' {} \\;
+# Solucionar el problema de bcrypt
+RUN npm uninstall bcrypt --save || true
+RUN npm install bcryptjs --save
+RUN find . -type f -name "*.js" -exec sed -i 's/require(["\x27]bcrypt["\x27])/require("bcryptjs")/g' {} \\; || true
+RUN find . -type f -name "*.js" -exec sed -i "s/from ['\"]bcrypt['\"]/from 'bcryptjs'/g" {} \\; || true
 
 # Instalar dependencias
 RUN npm install
@@ -466,11 +407,14 @@ COPY wait-for-it.sh /wait-for-it.sh
 RUN chmod +x /wait-for-it.sh
 
 # Exponer el puerto que usa la aplicación
-EXPOSE ${APP_PORT}
+EXPOSE \${APP_PORT}
 
 # Iniciar la aplicación
 CMD ["/bin/sh", "-c", "/wait-for-it.sh mongo:27017 && npm start"]
 EOF
+
+# Eliminar el archivo server.js.fixed que ya no es necesario
+rm -f server.js.fixed
 
 # Crear wait-for-it.sh
 cat > wait-for-it.sh << EOF
@@ -782,21 +726,21 @@ EOF
 
 # Crear script de inicialización de MongoDB para asegurar que las credenciales estén correctamente configuradas
 cat > mongo-init.js << EOF
-// Crear usuario administrador si no existe
+# Crear usuario administrador si no existe
 db.getSiblingDB("admin").createUser({
   user: "${MONGO_USER}",
   pwd: "${MONGO_PASSWORD}",
   roles: [{ role: "root", db: "admin" }]
 });
 
-// Crear la base de datos de la aplicación y un usuario específico
+# Crear la base de datos de la aplicación y un usuario específico
 db.getSiblingDB("${MONGO_DB}").createUser({
   user: "${MONGO_USER}",
   pwd: "${MONGO_PASSWORD}",
   roles: [{ role: "dbOwner", db: "${MONGO_DB}" }]
 });
 
-// Crear algunas colecciones básicas
+# Crear algunas colecciones básicas
 db.getSiblingDB("${MONGO_DB}").createCollection("users");
 db.getSiblingDB("${MONGO_DB}").createCollection("chats");
 db.getSiblingDB("${MONGO_DB}").createCollection("messages");
@@ -836,6 +780,9 @@ EMAIL_USER=${EMAIL_USER}
 EMAIL_PASS=********
 EMAIL_FROM=${EMAIL_FROM}
 EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
+
+# --- Panel de Administración ---
+ADMIN_PASS=********  # Contraseña para acceder al panel de administración en /admin
 
 # --- Configuración HTTPS ---
 DOMAIN_NAME=${DOMAIN_NAME}
@@ -879,6 +826,9 @@ EMAIL_USER=${EMAIL_USER}
 EMAIL_PASS='${EMAIL_PASS}'
 EMAIL_FROM=${EMAIL_FROM}
 EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
+
+# --- Panel de Administración ---
+ADMIN_PASS='${ADMIN_PASS}'  # Contraseña para acceder al panel de administración en /admin
 
 # --- Configuración HTTPS ---
 DOMAIN_NAME=${DOMAIN_NAME}
