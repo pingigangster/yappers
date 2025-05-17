@@ -31,16 +31,19 @@ const server = http.createServer(app);
 // El '1' significa que confíe en el primer proxy delante de él.
 app.set('trust proxy', 1);
 
-const io = socketio(server, {
+// Opciones para Socket.io
+const socketioOptions = {
     maxHttpBufferSize: 200e6, // Aumentar a 200 MB para permitir archivos multimedia más grandes
     pingTimeout: 60000, // Aumentar el tiempo de espera para detectar desconexiones (60 segundos)
     cors: {
         // Permitir conexiones desde la URL del túnel (obtenida de variable de entorno) o cualquier origen si no está definida.
-        // Asegúrate de establecer la variable de entorno CLOUDFLARE_TUNNEL_URL en tu entorno.
         origin: process.env.CLOUDFLARE_TUNNEL_URL || "*",
         methods: ["GET", "POST"]
     }
-});
+};
+
+// Inicializar Socket.io con las opciones
+const io = socketio(server, socketioOptions);
 
 // Configurar middlewares
 app.use(express.json());
