@@ -7,6 +7,26 @@ if [ -z "$BASH_VERSION" ]; then
     exit 1
 fi
 
+# Comprobar si Docker está instalado
+comprobar_requisitos() {
+    printf "Comprobando requisitos...\n"
+    
+    # Verificar si Docker está instalado
+    if ! command -v docker &> /dev/null; then
+        printf "${ROJO}ERROR: Docker no está instalado o no es accesible en el PATH.${NC}\n"
+        printf "Por favor, instala Docker siguiendo las instrucciones en: https://docs.docker.com/get-docker/\n"
+        exit 1
+    fi
+    
+    # Verificar si el plugin docker compose está disponible
+    if ! docker compose version &> /dev/null; then
+        printf "${ROJO}ERROR: El plugin Docker Compose no está instalado.${NC}\n"
+        printf "Por favor, instala el plugin Docker Compose siguiendo las instrucciones en:\n"
+        printf "https://docs.docker.com/compose/install/linux/#install-using-the-repository\n"
+        exit 1
+    fi
+}
+
 # Detectar si la terminal soporta colores
 SOPORTE_COLORES=0
 if [ -t 1 ]; then
@@ -38,6 +58,9 @@ imprimir() {
     printf "%s\n" "$1"
 }
 
+# Llamar a la función para comprobar Docker y Compose
+comprobar_requisitos
+
 imprimir "${VERDE}==================================================${NC}"
 imprimir "${VERDE}     CONFIGURACIÓN DE YAPPERS CHAT${NC}"
 imprimir "${VERDE}==================================================${NC}"
@@ -51,6 +74,7 @@ printf "\n"
 APP_PORT=""
 DOMAIN_NAME=""
 USE_HTTPS=""
+LETSENCRYPT_EMAIL=""
 MONGO_USER=""
 MONGO_PASSWORD=""
 MONGO_DB=""
@@ -143,6 +167,33 @@ pedir_valor "Puerto de la aplicación" "3000" APP_PORT
 pedir_valor "Nombre de dominio principal (dejar vacío para usar IP local)" "yappers.es" DOMAIN_NAME
 pedir_boolean "¿Usar HTTPS con Let's Encrypt?" "si" USE_HTTPS
 
+# Solicitar correo electrónico para Let's Encrypt si se eligió HTTPS
+if [ "$USE_HTTPS" = "true" ]; then
+    printf "${AZUL}Para obtener certificados SSL de Let's Encrypt, es necesario proporcionar un correo electrónico válido.${NC}\n"
+    printf "${AZUL}Este correo se usará para notificaciones sobre renovación y problemas con tus certificados.${NC}\n"
+    LETSENCRYPT_EMAIL_DEFAULT="admin@${DOMAIN_NAME}"
+    pedir_valor "Correo electrónico para certificados SSL" "$LETSENCRYPT_EMAIL_DEFAULT" LETSENCRYPT_EMAIL
+    
+    # Añadir información sobre certificados y advertencias
+    printf "\n${AMARILLO}--- Información importante sobre HTTPS ---${NC}\n"
+    if [ "$DOMAIN_NAME" = "localhost" ] || [[ "$DOMAIN_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf "${ROJO}AVISO: Has elegido usar HTTPS con una IP local o localhost.${NC}\n"
+        printf "${ROJO}Esto utilizará un certificado autofirmado que el navegador marcará como NO SEGURO.${NC}\n"
+        printf "${ROJO}Es completamente normal y no indica un problema con tu instalación.${NC}\n"
+        printf "${AZUL}Para usar el sitio, necesitarás aceptar el riesgo en tu navegador o añadir una excepción.${NC}\n"
+    else
+        printf "${AMARILLO}IMPORTANTE: Para que Let's Encrypt funcione correctamente:${NC}\n"
+        printf "  ${VERDE}1. El dominio ${DOMAIN_NAME} debe apuntar a la IP pública de este servidor${NC}\n"
+        printf "  ${VERDE}2. Los puertos 80 y 443 deben estar abiertos y accesibles desde Internet${NC}\n"
+        printf "  ${VERDE}3. El servidor debe ser accesible públicamente (no detrás de una red NAT sin redirección)${NC}\n"
+        printf "\n${AMARILLO}Si tu servidor no cumple estos requisitos:${NC}\n"
+        printf "  ${AZUL}- Se usará un certificado autofirmado como respaldo${NC}\n"
+        printf "  ${AZUL}- El navegador mostrará una advertencia de 'Sitio no seguro'${NC}\n"
+        printf "  ${AZUL}- Deberás añadir una excepción de seguridad en tu navegador${NC}\n"
+    fi
+    printf "\n"
+fi
+
 # Verificar si no hay dominio, usar IP local
 if [ "$DOMAIN_NAME" = "" ] || [ "$DOMAIN_NAME" = "localhost" ]; then
     printf "${AZUL}No se ha especificado un dominio válido. Se usará la IP local para acceder.${NC}\n"
@@ -234,122 +285,6 @@ EMAIL_FROM=${EMAIL_FROM}
 EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
 EOF
 
-# Crear nginx.conf con la configuración adecuada para el dominio
-cat > nginx.conf << EOF
-# Configuración para HTTP
-server {
-    listen 80;
-    server_name ${DOMAIN_NAME};
-
-    # Para validación de Let's Encrypt
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    # Redirigir HTTP a HTTPS si USE_HTTPS es true
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-}
-
-# Configuración para acceso por IP cuando no hay dominio
-server {
-    listen 80 default_server;
-    server_name _;
-    
-    # Configuración de resolución de DNS para servicios Docker
-    resolver 127.0.0.11 valid=30s;
-    set \$upstream app:${APP_PORT};
-    
-    location / {
-        proxy_pass http://\$upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        
-        # Configuración para reintentos
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
-    }
-}
-
-# Configuración para HTTPS
-server {
-    listen 443 ssl http2;
-    server_name ${DOMAIN_NAME};
-    
-    # Certificados SSL
-    ssl_certificate /etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem;
-    
-    # Configuración SSL optimizada
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_tickets off;
-    
-    # HSTS (15768000 segundos = 6 meses)
-    add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload" always;
-    
-    # Configuración de resolución de DNS para servicios Docker
-    resolver 127.0.0.11 valid=30s;
-    set \$upstream app:${APP_PORT};
-    
-    location / {
-        proxy_pass http://\$upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        
-        # Configuración para reintentos
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
-    }
-}
-
-# Configuración para HTTPS con IP
-server {
-    listen 443 ssl http2 default_server;
-    server_name _;
-    
-    # Certificados SSL autofirmados
-    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;
-    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;
-    
-    # Configuración SSL básica
-    ssl_protocols TLSv1.2 TLSv1.3;
-    
-    # Configuración de resolución de DNS para servicios Docker
-    resolver 127.0.0.11 valid=30s;
-    set \$upstream app:${APP_PORT};
-    
-    location / {
-        proxy_pass http://\$upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        
-        # Configuración para reintentos
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
-    }
-}
-EOF
-
 # Crear Dockerfile para Nginx
 cat > Dockerfile << EOF
 FROM nginx:alpine
@@ -357,22 +292,203 @@ FROM nginx:alpine
 # Instalar herramientas necesarias
 RUN apk add --no-cache curl certbot certbot-nginx openssl
 
-# Crear directorio para certificados SSL
-RUN mkdir -p /etc/letsencrypt /var/www/certbot
+# Crear directorios necesarios
+RUN mkdir -p /etc/letsencrypt /var/www/certbot /etc/ssl/private /etc/ssl/certs
 
-# Copiar la configuración personalizada de Nginx
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Generar certificado autofirmado por defecto
+RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/nginx-selfsigned.key \
+    -out /etc/ssl/certs/nginx-selfsigned.crt \
+    -subj "/CN=localhost"
 
-# Copiar script de inicialización
-COPY init-letsencrypt.sh /init-letsencrypt.sh
-RUN chmod +x /init-letsencrypt.sh
+# Copiar los archivos de configuración predefinidos
+COPY nginx-http.conf /etc/nginx/conf.d/default.conf.http
+COPY nginx-https.conf /etc/nginx/conf.d/default.conf.https
+COPY nginx-selfsigned.conf /etc/nginx/conf.d/default.conf.selfsigned
+
+# Copiar script de inicialización simplificado
+COPY init-nginx.sh /init-nginx.sh
+RUN chmod +x /init-nginx.sh
 
 # Exponer puertos HTTP y HTTPS
 EXPOSE 80
 EXPOSE 443
 
-# Iniciar Nginx y configurar renovación de certificados
-CMD ["/bin/sh", "-c", "/init-letsencrypt.sh && nginx -g 'daemon off;'"]
+# Iniciar script de configuración
+CMD ["/init-nginx.sh"]
+EOF
+
+# Crear archivo de configuración HTTP básico
+cat > nginx-http.conf << 'EOF'
+server {
+    listen 80;
+    server_name _;
+    
+    # Para validación de Let's Encrypt
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    
+    # Todo lo demás redirige a HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+EOF
+
+# Crear archivo de configuración HTTPS con certificados Let's Encrypt
+cat > nginx-https.conf << 'EOF'
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name DOMAIN_PLACEHOLDER;
+    
+    # Certificados Let's Encrypt
+    ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
+    
+    # Configuración SSL
+    ssl_protocols TLSv1.2 TLSv1.3;
+    
+    location / {
+        proxy_pass http://app:APP_PORT_PLACEHOLDER;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+EOF
+
+# Crear archivo de configuración con certificado autofirmado
+cat > nginx-selfsigned.conf << 'EOF'
+server {
+    listen 80;
+    server_name _;
+    
+    # Para validación de Let's Encrypt
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    
+    # Todo lo demás redirige a HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name _;
+    
+    # Certificados autofirmados
+    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;
+    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;
+    
+    # Configuración SSL 
+    ssl_protocols TLSv1.2 TLSv1.3;
+    
+    location / {
+        proxy_pass http://app:APP_PORT_PLACEHOLDER;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+EOF
+
+# Crear script de inicialización ultra simplificado
+cat > init-nginx.sh << 'EOF'
+#!/bin/sh
+
+# Variables del entorno
+DOMAIN=${DOMAIN:-localhost}
+USE_HTTPS=${USE_HTTPS:-false}
+LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-admin@example.com}
+APP_PORT=${APP_PORT:-3000}
+
+echo "========================================================"
+echo "   CONFIGURACIÓN SIMPLIFICADA DE NGINX"
+echo "========================================================"
+echo "- Dominio: $DOMAIN"
+echo "- HTTPS: $USE_HTTPS"
+echo "- Puerto App: $APP_PORT"
+echo "- Email Let's Encrypt: $LETSENCRYPT_EMAIL"
+
+# Reemplazar valores en archivos de configuración
+sed -i "s/APP_PORT_PLACEHOLDER/$APP_PORT/g" /etc/nginx/conf.d/default.conf.https
+sed -i "s/APP_PORT_PLACEHOLDER/$APP_PORT/g" /etc/nginx/conf.d/default.conf.selfsigned
+sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" /etc/nginx/conf.d/default.conf.https
+
+# Instalar configuración base HTTP para comenzar
+cp /etc/nginx/conf.d/default.conf.http /etc/nginx/conf.d/default.conf
+
+# Si se solicita HTTPS y tenemos un dominio válido
+if [ "$USE_HTTPS" = "true" ] && [ "$DOMAIN" != "localhost" ]; then
+    echo "Configurando HTTPS para dominio: $DOMAIN"
+    
+    # Intentar obtener o renovar certificado
+    echo "Intentando obtener/renovar certificado Let's Encrypt..."
+    
+    # Iniciar nginx temporalmente solo para validación
+    nginx
+    sleep 2
+    
+    # Obtener certificado
+    certbot certonly --webroot -n --agree-tos --email $LETSENCRYPT_EMAIL \
+        -w /var/www/certbot -d $DOMAIN
+    
+    # Detener nginx temporal
+    nginx -s stop
+    sleep 2
+    
+    # Verificar si se obtuvo el certificado
+    if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+        echo "✅ Certificado obtenido correctamente."
+        
+        # Usar configuración HTTPS
+        cp /etc/nginx/conf.d/default.conf.https /etc/nginx/conf.d/default.conf
+        
+        # Configurar renovación en segundo plano
+        (
+            while :; do
+                sleep 12h
+                echo "Verificando renovación de certificados..."
+                nginx -s stop
+                sleep 2
+                certbot renew --quiet
+                if [ $? -eq 0 ]; then
+                    echo "Certificados renovados."
+                fi
+                nginx
+                sleep 2
+            done
+        ) &
+    else
+        echo "❌ Error obteniendo certificado. Usando autofirmado."
+        cp /etc/nginx/conf.d/default.conf.selfsigned /etc/nginx/conf.d/default.conf
+    fi
+else
+    echo "Usando HTTPS con certificado autofirmado."
+    cp /etc/nginx/conf.d/default.conf.selfsigned /etc/nginx/conf.d/default.conf
+fi
+
+# Verificar configuración
+echo "Verificando configuración..."
+nginx -t
+
+if [ $? -eq 0 ]; then
+    echo "✅ Configuración correcta."
+else
+    echo "❌ Error en configuración. Usando fallback minimal."
+    echo "server { listen 80; location / { proxy_pass http://app:$APP_PORT; } }" > /etc/nginx/conf.d/default.conf
+fi
+
+# Iniciar Nginx
+echo "Iniciando Nginx..."
+nginx -g 'daemon off;'
 EOF
 
 # Crear Dockerfile.app simplificado
@@ -480,249 +596,6 @@ echo "MongoDB está disponible, iniciando aplicación..."
 exec \$cmd
 EOF
 chmod +x wait-for-it.sh
-
-# Crear script de inicialización para Let's Encrypt
-cat > init-letsencrypt.sh << EOF
-#!/bin/sh
-
-# Inicialización para Let's Encrypt
-
-# Detener cualquier instancia de Nginx en ejecución
-nginx -s stop 2>/dev/null || true
-sleep 2
-
-# Verificar si los puertos están en uso
-if netstat -tln | grep -q ':80\|:443'; then
-  echo "ADVERTENCIA: Los puertos 80 o 443 ya están en uso. Esto puede causar problemas con Nginx."
-  echo "Considere detener otros servidores web o servicios que estén usando estos puertos."
-  # No salimos con error para permitir que el contenedor siga funcionando
-fi
-
-# Verificar si se debe usar HTTPS
-if [ "\$USE_HTTPS" = "true" ] && [ "\$DOMAIN" != "localhost" ] && [ "\$DOMAIN" != "" ]; then
-  echo "Configurando HTTPS para dominio: \$DOMAIN"
-  
-  # Crear certificado autofirmado inicialmente
-  mkdir -p /etc/ssl/private /etc/ssl/certs
-  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\
-          -keyout /etc/ssl/private/nginx-selfsigned.key \\
-          -out /etc/ssl/certs/nginx-selfsigned.crt \\
-          -subj "/CN=\$DOMAIN"
-  
-  # Configurar Diffie-Hellman
-  openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048
-
-  # Verificar si ya existen certificados de Let's Encrypt
-  if [ ! -d "/etc/letsencrypt/live/\$DOMAIN" ]; then
-    echo "No se encontraron certificados para \$DOMAIN. Intentando obtener nuevos certificados..."
-    
-    # Crear directorio para verificación de Let's Encrypt
-    mkdir -p /var/www/certbot
-    
-    # Intentar obtener certificado real
-    certbot --nginx --non-interactive --agree-tos --email \$EMAIL_USER \\
-            --domains \$DOMAIN --keep-until-expiring
-    
-    # Si falla, ya tenemos certificados autofirmados listos
-    if [ \$? -ne 0 ]; then
-      echo "No se pudo obtener el certificado de Let's Encrypt. Usando certificado autofirmado..."
-      
-      # Actualizar configuración para usar certificado autofirmado
-      sed -i "s|/etc/letsencrypt/live/\$DOMAIN/fullchain.pem|/etc/ssl/certs/nginx-selfsigned.crt|g" /etc/nginx/conf.d/default.conf
-      sed -i "s|/etc/letsencrypt/live/\$DOMAIN/privkey.pem|/etc/ssl/private/nginx-selfsigned.key|g" /etc/nginx/conf.d/default.conf
-    fi
-  else
-    echo "Certificados existentes encontrados para \$DOMAIN"
-    
-    # Verificar si los certificados son válidos
-    if [ ! -f "/etc/letsencrypt/live/\$DOMAIN/fullchain.pem" ] || [ ! -f "/etc/letsencrypt/live/\$DOMAIN/privkey.pem" ]; then
-      echo "Certificados incompletos o inválidos. Usando certificado autofirmado..."
-      # Actualizar configuración para usar certificado autofirmado
-      sed -i "s|/etc/letsencrypt/live/\$DOMAIN/fullchain.pem|/etc/ssl/certs/nginx-selfsigned.crt|g" /etc/nginx/conf.d/default.conf
-      sed -i "s|/etc/letsencrypt/live/\$DOMAIN/privkey.pem|/etc/ssl/private/nginx-selfsigned.key|g" /etc/nginx/conf.d/default.conf
-    fi
-  fi
-  
-  # Configurar renovación automática en segundo plano
-  (
-    while :; do
-      sleep 12h
-      certbot renew --quiet
-      nginx -s reload
-    done
-  ) &
-  
-else
-  echo "HTTPS desactivado o usando IP. Usando configuración HTTP o certificado autofirmado."
-  
-  # Crear certificado autofirmado para IP/localhost
-  mkdir -p /etc/ssl/private /etc/ssl/certs
-  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\
-          -keyout /etc/ssl/private/nginx-selfsigned.key \\
-          -out /etc/ssl/certs/nginx-selfsigned.crt \\
-          -subj "/CN=localhost"
-  
-  # Configurar Diffie-Hellman
-  openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048
-  
-  # Actualizar configuración para usar certificado autofirmado
-  sed -i "s|/etc/letsencrypt/live/.*/fullchain.pem|/etc/ssl/certs/nginx-selfsigned.crt|g" /etc/nginx/conf.d/default.conf
-  sed -i "s|/etc/letsencrypt/live/.*/privkey.pem|/etc/ssl/private/nginx-selfsigned.key|g" /etc/nginx/conf.d/default.conf
-fi
-
-# Verificar y iniciar Nginx con intento de recuperación
-nginx -t
-if [ \$? -eq 0 ]; then
-  # Configuración válida, iniciar Nginx
-  nginx -g 'daemon off;'
-else
-  echo "Configuración de Nginx inválida, usando configuración alternativa con certificados autofirmados"
-  # Actualizar a configuración mínima como fallback
-  cat > /etc/nginx/conf.d/default.conf << EOT
-server {
-    listen 80;
-    server_name _;
-    
-    location / {
-        proxy_pass http://app:${APP_PORT};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-EOT
-  nginx -g 'daemon off;'
-fi
-
-exit 0
-EOF
-chmod +x init-letsencrypt.sh
-
-# Exportar variables para docker compose
-export APP_PORT
-export MONGO_URI="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/${MONGO_DB}?authSource=admin"
-export JWT_SECRET
-export SESSION_SECRET
-export GOOGLE_CLIENT_ID
-export GOOGLE_CLIENT_SECRET
-export GOOGLE_CALLBACK_URL
-export EMAIL_HOST
-export EMAIL_PORT
-export EMAIL_SECURE
-export EMAIL_USER
-export EMAIL_PASS
-export EMAIL_FROM
-export EMAIL_TLS_REJECT
-export MONGO_USER
-export MONGO_PASSWORD
-export MONGO_DB
-export DOMAIN_NAME
-export USE_HTTPS
-
-# Crear compose.yml
-cat > compose.yml << EOF
-services:
-  nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      app:
-        condition: service_started
-      mongo:
-        condition: service_started
-    volumes:
-      - certbot-etc:/etc/letsencrypt
-      - certbot-var:/var/lib/letsencrypt
-      - certbot-www:/var/www/certbot
-    environment:
-      - DOMAIN=${DOMAIN_NAME}
-      - USE_HTTPS=${USE_HTTPS}
-      - EMAIL_USER=${EMAIL_USER}
-      - APP_PORT=${APP_PORT}
-    networks:
-      - app-network
-    restart: always
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile.app
-    environment:
-      - PORT=${APP_PORT}
-      - MONGO_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/${MONGO_DB}?authSource=admin
-      - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
-      - EMAIL_HOST=${EMAIL_HOST}
-      - EMAIL_PORT=${EMAIL_PORT}
-      - EMAIL_SECURE=${EMAIL_SECURE}
-      - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASS=${EMAIL_PASS}
-      - EMAIL_FROM=${EMAIL_FROM}
-      - EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
-    expose:
-      - "${APP_PORT}"
-    depends_on:
-      mongo:
-        condition: service_started
-    networks:
-      - app-network
-    restart: always
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${APP_PORT}/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  mongo:
-    image: mongo:latest
-    command: ["--auth"]
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_DB}
-    volumes:
-      - mongo-data:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    ports:
-      - "27017:27017"
-    networks:
-      - app-network
-    restart: always
-    # Healthcheck desactivado ya que puede causar problemas en algunas versiones
-    # Si necesitas activarlo, descomenta estas líneas y ajústalas según tu versión de MongoDB
-    # healthcheck:
-    #   test: ["CMD", "mongo", "--eval", "db.stats()"]
-    #   start_period: 60s
-    #   interval: 20s
-    #   timeout: 10s
-    #   retries: 3
-
-networks:
-  app-network:
-    driver: bridge
-
-volumes:
-  mongo-data:
-  certbot-etc:
-  certbot-var:
-  certbot-www:
-EOF
 
 # Crear script de inicialización de MongoDB para asegurar que las credenciales estén correctamente configuradas
 cat > mongo-init.js << EOF
@@ -892,43 +765,9 @@ La aplicación estará disponible en:
 
 ## Seguridad
 
-- **NO subas archivos con credenciales reales a repositorios públicos**
-- Usa el archivo \`.env.local.example\` como referencia para crear tus propios archivos .env
-- **IMPORTANTE**: GitHub bloquea el push de credenciales reales (como claves de OAuth, tokens, etc.)
-- Utiliza el script \`setup_yappers.sh\` para configurar los archivos de forma segura
-
-## Contribuir
-
-Si encuentras algún problema o quieres contribuir, por favor crea un issue o un pull request.
-EOF
-
-# Crear archivo .gitignore
-cat > .gitignore << EOF
-# Archivos de entorno
-.env
-.env.local
-
-# Archivos de Docker
-compose.override.yml
-
-# Directorios de dependencias
-node_modules/
-
-# Archivos de logs
-*.log
-npm-debug.log*
-
-# Directorio de base de datos local
-data/
-
-# Certificados SSL
-*.pem
-*.key
-*.crt
-
-# Archivos del sistema operativo
-.DS_Store
-Thumbs.db
+- Mantén seguras las credenciales y contraseñas configuradas
+- Usa el archivo \`.env.local.example\` como referencia si necesitas crear configuraciones adicionales
+- La contraseña de administrador te permite acceder al panel en la ruta /admin
 EOF
 
 printf "\n${VERDE}Archivos creados correctamente:${NC}\n"
@@ -942,7 +781,6 @@ printf "${AZUL}- .env${NC}\n"
 printf "${AZUL}- .env.local${NC}\n"
 printf "${AZUL}- .env.local.example${NC}\n"
 printf "${AZUL}- README.md${NC}\n"
-printf "${AZUL}- .gitignore${NC}\n"
 
 printf "\n${VERDE}==================================================${NC}\n"
 printf "${VERDE}     CONFIGURACIÓN COMPLETADA${NC}\n"
@@ -973,7 +811,151 @@ printf "${VERDE}docker compose up -d${NC}\n"
 printf "\n${AZUL}Para ver los logs:${NC}\n"
 printf "${VERDE}docker compose logs -f${NC}\n"
 printf "${VERDE}==================================================${NC}\n"
-printf "${ROJO}AVISO DE SEGURIDAD:${NC}\n"
-printf "${ROJO}NO subas archivos con credenciales reales a GitHub.${NC}\n"
-printf "${ROJO}Usa siempre .env.local.example como plantilla segura.${NC}\n"
-printf "${VERDE}==================================================${NC}\n" 
+printf "${AZUL}Recuerda: Puedes acceder al panel de administración en /admin ${NC}\n"
+printf "${AZUL}usando la contraseña que configuraste.${NC}\n"
+
+# Añadir información sobre HTTPS en los mensajes finales
+if [ "$USE_HTTPS" = "true" ]; then
+    if [ "$DOMAIN_NAME" = "localhost" ] || [[ "$DOMAIN_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf "\n${AMARILLO}NOTA SOBRE HTTPS:${NC}\n"
+        printf "${AMARILLO}Al acceder por HTTPS verás una advertencia de seguridad.${NC}\n"
+        printf "${AMARILLO}Esto es normal cuando se usan certificados autofirmados.${NC}\n"
+        printf "${AMARILLO}Para continuar, haz clic en 'Avanzado' → 'Continuar a sitio no seguro'${NC}\n"
+    else
+        printf "\n${AMARILLO}NOTA SOBRE HTTPS:${NC}\n"
+        printf "${AMARILLO}Si Let's Encrypt no puede verificar tu dominio, verás una advertencia.${NC}\n"
+        printf "${AMARILLO}Verifica que tu dominio ${DOMAIN_NAME} esté correctamente configurado${NC}\n"
+        printf "${AMARILLO}y que los puertos 80 y 443 estén accesibles desde Internet.${NC}\n"
+    fi
+fi
+
+printf "${VERDE}==================================================${NC}\n"
+
+# Exportar variables para docker compose
+export APP_PORT
+export MONGO_URI="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/${MONGO_DB}?authSource=admin"
+export JWT_SECRET
+export SESSION_SECRET
+export GOOGLE_CLIENT_ID
+export GOOGLE_CLIENT_SECRET
+export GOOGLE_CALLBACK_URL
+export EMAIL_HOST
+export EMAIL_PORT
+export EMAIL_SECURE
+export EMAIL_USER
+export EMAIL_PASS
+export EMAIL_FROM
+export EMAIL_TLS_REJECT
+export MONGO_USER
+export MONGO_PASSWORD
+export MONGO_DB
+export DOMAIN_NAME
+export USE_HTTPS
+export LETSENCRYPT_EMAIL
+
+# Crear compose.yml actualizado con formato YAML correcto
+cat > compose.yml << EOF
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      app:
+        condition: service_started
+      mongo:
+        condition: service_started
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - certbot-www:/var/www/certbot
+    environment:
+      - DOMAIN=${DOMAIN_NAME}
+      - USE_HTTPS=${USE_HTTPS}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+      - APP_PORT=${APP_PORT}
+    networks:
+      - app-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    environment:
+      - PORT=${APP_PORT}
+      - MONGO_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/${MONGO_DB}?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_SECURE=${EMAIL_SECURE}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
+    expose:
+      - "${APP_PORT}"
+    depends_on:
+      mongo:
+        condition: service_started
+    networks:
+      - app-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${APP_PORT}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  mongo:
+    image: mongo:latest
+    command: ["--auth"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB}
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    ports:
+      - "27017:27017"
+    networks:
+      - app-network
+    restart: always
+    # Healthcheck desactivado ya que puede causar problemas en algunas versiones
+    # Si necesitas activarlo, descomenta estas líneas y ajústalas según tu versión de MongoDB
+    # healthcheck:
+    #   test: ["CMD", "mongo", "--eval", "db.stats()"]
+    #   start_period: 60s
+    #   interval: 20s
+    #   timeout: 10s
+    #   retries: 3
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  certbot-etc:
+  certbot-var:
+  certbot-www:
+EOF
+
+# Mostrar el archivo compose.yml generado (para verificación)
+echo "Archivo compose.yml generado:"
+cat compose.yml 
