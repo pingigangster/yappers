@@ -13,9 +13,43 @@ comprobar_requisitos() {
     
     # Verificar si Docker está instalado
     if ! command -v docker &> /dev/null; then
-        printf "${ROJO}ERROR: Docker no está instalado o no es accesible en el PATH.${NC}\n"
-        printf "Por favor, instala Docker siguiendo las instrucciones en: https://docs.docker.com/get-docker/\n"
-        exit 1
+        printf "${AMARILLO}Docker no está instalado en el sistema.${NC}\n"
+        
+        # Preguntar al usuario si quiere instalarlo automáticamente
+        local respuesta
+        printf "${VERDE}¿Quieres instalar Docker automáticamente? (si/no): ${NC}"
+        read respuesta
+        
+        case "$respuesta" in
+            [Ss]|[Ss][Ii]|[Yy]|[Yy][Ee][Ss]|true|TRUE|True)
+                printf "${AZUL}Instalando Docker...${NC}\n"
+                # Ejecutar el script de instalación
+                sudo apt update && \
+                sudo apt install -y ca-certificates curl gnupg && \
+                sudo install -m 0755 -d /etc/apt/keyrings && \
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+                sudo chmod a+r /etc/apt/keyrings/docker.gpg && \
+                echo \
+                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+                sudo apt update && \
+                sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+                
+                # Verificar si la instalación fue exitosa
+                if ! command -v docker &> /dev/null; then
+                    printf "${ROJO}Error al instalar Docker. Por favor, instala Docker manualmente.${NC}\n"
+                    exit 1
+                fi
+                
+                printf "${VERDE}Docker instalado correctamente.${NC}\n"
+                ;;
+            *)
+                printf "${ROJO}Docker es necesario para ejecutar este script. Instalación cancelada.${NC}\n"
+                printf "Por favor, instala Docker manualmente siguiendo las instrucciones en: https://docs.docker.com/get-docker/\n"
+                exit 1
+                ;;
+        esac
     fi
     
     # Verificar si el plugin docker compose está disponible
@@ -164,10 +198,32 @@ pedir_boolean() {
 # Configuración General
 printf "\n${AMARILLO}--- Configuración General ---${NC}\n"
 pedir_valor "Puerto de la aplicación" "3000" APP_PORT
-pedir_valor "Nombre de dominio principal (dejar vacío para usar IP local)" "yappers.es" DOMAIN_NAME
-pedir_boolean "¿Usar HTTPS con Let's Encrypt?" "si" USE_HTTPS
+pedir_valor "Nombre de dominio principal (dejar vacío para usar IP local)" "localhost" DOMAIN_NAME
 
-# Solicitar correo electrónico para Let's Encrypt si se eligió HTTPS
+# Verificar si no hay dominio o es localhost, usar IP local
+if [ "$DOMAIN_NAME" = "" ] || [ "$DOMAIN_NAME" = "localhost" ]; then
+    printf "${AZUL}Se ha especificado 'localhost' o se ha dejado vacío el dominio.${NC}\n"
+    printf "${AZUL}Se usará la IP local para acceder y NO se utilizará HTTPS con Let's Encrypt.${NC}\n"
+    
+    # Intentar obtener la IP local
+    IP_LOCAL=$(hostname -I | awk '{print $1}')
+    if [ -n "$IP_LOCAL" ]; then
+        printf "${VERDE}IP local detectada: ${IP_LOCAL}${NC}\n"
+        DOMAIN_NAME=$IP_LOCAL
+    else
+        printf "${AMARILLO}No se pudo detectar la IP local. Se usará 'localhost'.${NC}\n"
+        DOMAIN_NAME="localhost"
+    fi
+    
+    # Forzar USE_HTTPS a false para localhost/IP
+    USE_HTTPS="false"
+    printf "${AZUL}Se usará HTTP sin certificados SSL para desarrollo local.${NC}\n"
+else
+    # Solo preguntar por HTTPS si hay un dominio válido
+    pedir_boolean "¿Usar HTTPS con Let's Encrypt?" "si" USE_HTTPS
+fi
+
+# Solicitar correo electrónico para Let's Encrypt solo si se eligió HTTPS y no es localhost
 if [ "$USE_HTTPS" = "true" ]; then
     printf "${AZUL}Para obtener certificados SSL de Let's Encrypt, es necesario proporcionar un correo electrónico válido.${NC}\n"
     printf "${AZUL}Este correo se usará para notificaciones sobre renovación y problemas con tus certificados.${NC}\n"
@@ -176,8 +232,8 @@ if [ "$USE_HTTPS" = "true" ]; then
     
     # Añadir información sobre certificados y advertencias
     printf "\n${AMARILLO}--- Información importante sobre HTTPS ---${NC}\n"
-    if [ "$DOMAIN_NAME" = "localhost" ] || [[ "$DOMAIN_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        printf "${ROJO}AVISO: Has elegido usar HTTPS con una IP local o localhost.${NC}\n"
+    if [[ "$DOMAIN_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf "${ROJO}AVISO: Has elegido usar HTTPS con una IP.${NC}\n"
         printf "${ROJO}Esto utilizará un certificado autofirmado que el navegador marcará como NO SEGURO.${NC}\n"
         printf "${ROJO}Es completamente normal y no indica un problema con tu instalación.${NC}\n"
         printf "${AZUL}Para usar el sitio, necesitarás aceptar el riesgo en tu navegador o añadir una excepción.${NC}\n"
@@ -192,26 +248,6 @@ if [ "$USE_HTTPS" = "true" ]; then
         printf "  ${AZUL}- Deberás añadir una excepción de seguridad en tu navegador${NC}\n"
     fi
     printf "\n"
-fi
-
-# Verificar si no hay dominio, usar IP local
-if [ "$DOMAIN_NAME" = "" ] || [ "$DOMAIN_NAME" = "localhost" ]; then
-    printf "${AZUL}No se ha especificado un dominio válido. Se usará la IP local para acceder.${NC}\n"
-    
-    # Intentar obtener la IP local
-    IP_LOCAL=$(hostname -I | awk '{print $1}')
-    if [ -n "$IP_LOCAL" ]; then
-        printf "${VERDE}IP local detectada: ${IP_LOCAL}${NC}\n"
-        DOMAIN_NAME=$IP_LOCAL
-    else
-        printf "${AMARILLO}No se pudo detectar la IP local. Se usará 'localhost'.${NC}\n"
-        DOMAIN_NAME="localhost"
-    fi
-    
-    # Forzar USE_HTTPS a false si estamos usando IP o localhost
-    if [ "$USE_HTTPS" = "true" ]; then
-        printf "${AMARILLO}HTTPS con Let's Encrypt requiere un dominio válido. Se usará un certificado autofirmado.${NC}\n"
-    fi
 fi
 
 # Configuración de MongoDB
@@ -544,10 +580,57 @@ port=\$(printf "%s\n" "\$1"| cut -d : -f 2)
 shift
 cmd="\$@"
 
-# Función para verificar si el puerto está abierto
-check_port() {
-    nc -z -w 2 \$host \$port
+# Mostrar información de depuración para ayudar a resolver problemas
+echo "Intentando conectar a: \$host en el puerto \$port"
+
+# Función para verificar resolución DNS
+check_dns() {
+    echo "Verificando resolución DNS para \$host..."
+    if getent hosts \$host > /dev/null 2>&1; then
+        echo "✅ Resolución DNS exitosa para \$host"
+        return 0
+    fi
+    
+    echo "❌ Error de resolución DNS para \$host"
+    return 1
+}
+
+# Función para verificar si el puerto está abierto con netcat
+check_port_nc() {
+    nc -z -w 2 \$host \$port > /dev/null 2>&1
     return \$?
+}
+
+# Función para verificar si el host está disponible con ping
+check_host_ping() {
+    ping -c 1 -W 2 \$host > /dev/null 2>&1
+    return \$?
+}
+
+# Función alternativa para verificar puerto con timeout y /dev/tcp (más compatible)
+check_port_tcp() {
+    (echo > /dev/tcp/\$host/\$port) > /dev/null 2>&1
+    return \$?
+}
+
+# Función principal para verificar si el puerto está abierto usando múltiples métodos
+check_port() {
+    # Intentar con netcat primero (más confiable)
+    if check_port_nc; then
+        return 0
+    fi
+    
+    # Si netcat falla, intentar con /dev/tcp
+    if check_port_tcp; then
+        return 0
+    fi
+    
+    # Si ambos fallan, verificar si al menos el host responde
+    if check_host_ping; then
+        echo "Host responde a ping pero el puerto no está disponible"
+    fi
+    
+    return 1
 }
 
 # Función para intentar la conexión con retroceso exponencial
@@ -555,6 +638,30 @@ wait_with_backoff() {
     local max_attempts=15
     local timeout=1
     local attempt=1
+    
+    # Intentar resolver el nombre de host primero
+    check_dns
+    
+    # En caso de error de resolución DNS, mostrar información útil
+    if [ \$? -ne 0 ]; then
+        echo "Problemas de resolución DNS detectados. Verificando la configuración de red..."
+        
+        # Mostrar información de red útil para depuración
+        echo "---- Información de red para depuración ----"
+        echo "Contenido de /etc/hosts:"
+        cat /etc/hosts
+        echo "Contenido de /etc/resolv.conf:"
+        cat /etc/resolv.conf
+        echo "Resultado de ip addr:"
+        ip addr
+        echo "Resultado de ip route:"
+        ip route
+        echo "-----------------------------------------"
+        
+        # Como alternativa, intentar usar la dirección IP 172.17.0.2 (IP típica del primer contenedor en la red default)
+        echo "Intentando con IP alternativa (172.17.0.2) como fallback..."
+        host="172.17.0.2"
+    fi
 
     while [ \$attempt -le \$max_attempts ]; do
         echo "Intento \$attempt de \$max_attempts: esperando a que \$host:\$port esté disponible..."
@@ -587,12 +694,13 @@ wait_with_backoff() {
     
     echo "WARNING: No se pudo conectar a \$host:\$port después de \$max_attempts intentos."
     echo "La aplicación intentará iniciarse de todos modos, pero puede fallar si MongoDB no está disponible."
-    return 1
+    # Retorno 0 en lugar de 1 para permitir que la aplicación intente iniciar de todos modos
+    return 0
 }
 
 # Intentar conectar con retroceso exponencial
 wait_with_backoff
-echo "MongoDB está disponible, iniciando aplicación..."
+echo "MongoDB está disponible o se agotó el tiempo de espera, iniciando aplicación..."
 exec \$cmd
 EOF
 chmod +x wait-for-it.sh
