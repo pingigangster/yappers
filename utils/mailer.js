@@ -79,7 +79,7 @@ const sendWelcomeEmail = async (user) => {
                   </p>
                   <p style="color: #888888; font-size: 12px; line-height: 1.5; margin: 15px 0 0 0;">
                     Este es un correo automático, por favor no respondas a este mensaje.<br>
-                    &copy; ${new Date().getFullYear()} Tu Aplicación de Chat. Todos los derechos reservados.
+                    &copy; ${new Date().getFullYear()} Yappers. Todos los derechos reservados.
                   </p>
                 </td>
               </tr>
@@ -136,7 +136,7 @@ const sendPasswordResetEmail = async (user, resetToken) => {
                   </p>
                   <p style="color: #888888; font-size: 12px; line-height: 1.5; margin: 15px 0 0 0;">
                     Este es un correo automático, por favor no respondas a este mensaje.<br>
-                    &copy; ${new Date().getFullYear()} Tu Aplicación de Chat. Todos los derechos reservados.
+                    &copy; ${new Date().getFullYear()} Yappers. Todos los derechos reservados.
                   </p>
                 </td>
               </tr>

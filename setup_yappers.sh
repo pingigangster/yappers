@@ -431,17 +431,20 @@ EOF
 cat > Dockerfile << EOF
 FROM nginx:alpine
 
+# Argumentos de construcción
+ARG DOMAIN=localhost
+
 # Instalar herramientas necesarias
 RUN apk add --no-cache curl certbot certbot-nginx openssl
 
 # Crear directorios necesarios
 RUN mkdir -p /etc/letsencrypt /var/www/certbot /etc/ssl/private /etc/ssl/certs
 
-# Generar certificado autofirmado por defecto
-RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/ssl/private/nginx-selfsigned.key \
-    -out /etc/ssl/certs/nginx-selfsigned.crt \
-    -subj "/CN=localhost"
+# Generar certificado autofirmado por defecto usando el dominio proporcionado
+RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\
+    -keyout /etc/ssl/private/nginx-selfsigned.key \\
+    -out /etc/ssl/certs/nginx-selfsigned.crt \\
+    -subj "/CN=\${DOMAIN}"
 
 # Copiar los archivos de configuración predefinidos
 COPY nginx-http.conf /etc/nginx/conf.d/default.conf.http
@@ -658,7 +661,7 @@ RUN find . -type f -name "*.js" -exec sed -i "s/from ['\"]bcrypt['\"]/from 'bcry
 RUN npm install
 
 # Copiar archivo .env generado por el script
-COPY .env .env
+COPY .env.local .env.local
 
 # Crear script de inicio con comprobación de MongoDB
 COPY wait-for-it.sh /wait-for-it.sh
@@ -957,31 +960,6 @@ Para configurar el proyecto:
 \`\`\`bash
 bash setup_yappers.sh
 \`\`\`
-
-Este script te pedirá toda la información necesaria para configurar los archivos, incluyendo:
-- Puerto de aplicación
-- Dominio (o se usará IP local si no tienes dominio)
-- Configuración HTTPS/certificados SSL
-- Credenciales de base de datos
-- OAuth de Google y correo electrónico
-
-## Despliegue con Docker Compose
-
-Para desplegar toda la aplicación:
-
-\`\`\`bash
-docker compose up -d
-\`\`\`
-
-La aplicación estará disponible en:
-- Con dominio: https://tu-dominio
-- Sin dominio: https://tu-ip-local (certificado autofirmado)
-
-## Seguridad
-
-- Mantén seguras las credenciales y contraseñas configuradas
-- Usa el archivo \`.env.local.example\` como referencia si necesitas crear configuraciones adicionales
-- La contraseña de administrador te permite acceder al panel en la ruta /admin
 EOF
 
 printf "\n${VERDE}Archivos creados correctamente:${NC}\n"
@@ -1043,7 +1021,7 @@ if [ "$USE_HTTPS" = "true" ]; then
     fi
 fi
 
-printf "${VERDE}==================================================${NC}\n"
+printf "${VERDE}==================================================${NC}\n" 
 
 # Exportar variables para docker compose
 export APP_PORT
@@ -1074,6 +1052,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - DOMAIN=${DOMAIN_NAME}
     ports:
       - "80:80"
       - "443:443"
@@ -1126,6 +1106,7 @@ services:
       - EMAIL_PASS=${EMAIL_PASS}
       - EMAIL_FROM=${EMAIL_FROM}
       - EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
+      - ADMIN_PASS=${ADMIN_PASS}
     expose:
       - "${APP_PORT}"
     depends_on:
@@ -1194,4 +1175,4 @@ EOF
 
 # Mostrar el archivo compose.yml generado (para verificación)
 echo "Archivo compose.yml generado:"
-cat compose.yml 
+cat compose.yml
