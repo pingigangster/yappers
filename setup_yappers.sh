@@ -577,17 +577,32 @@ if [ "$USE_HTTPS" = "true" ] && [ "$DOMAIN" != "localhost" ]; then
     # Intentar obtener o renovar certificado
     echo "Intentando obtener/renovar certificado Let's Encrypt..."
     
-    # Iniciar nginx temporalmente solo para validación
-    nginx
-    sleep 2
-    
-    # Obtener certificado
-    certbot certonly --webroot -n --agree-tos --email $LETSENCRYPT_EMAIL \
-        -w /var/www/certbot -d $DOMAIN
-    
-    # Detener nginx temporal
-    nginx -s stop
-    sleep 2
+    # Comprobar si ya existe un certificado previo o en curso
+    if [ -d "/etc/letsencrypt/live/$DOMAIN" ] || [ -d "/etc/letsencrypt/renewal/$DOMAIN.conf" ]; then
+        echo "Se encontró un certificado existente. Intentando renovar..."
+        # Iniciar nginx temporalmente solo para validación
+        nginx
+        sleep 2
+        
+        # Intentar renovar certificado existente
+        certbot renew --quiet
+        
+        # Detener nginx temporal
+        nginx -s stop
+        sleep 2
+    else
+        # Iniciar nginx temporalmente solo para validación
+        nginx
+        sleep 2
+        
+        # Obtener certificado nuevo
+        certbot certonly --webroot -n --agree-tos --email $LETSENCRYPT_EMAIL \
+            -w /var/www/certbot -d $DOMAIN
+        
+        # Detener nginx temporal
+        nginx -s stop
+        sleep 2
+    fi
     
     # Verificar si se obtuvo el certificado
     if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then

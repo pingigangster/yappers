@@ -51,7 +51,7 @@ const sendEmail = async (options) => {
  * @returns {Promise} - Promesa con resultado del envío
  */
 const sendWelcomeEmail = async (user) => {
-  const subject = '¡Bienvenido a nuestra Aplicación!';
+  const subject = '¡Bienvenido a Yappers!';
   const html = `
     <body style="margin: 0; padding: 0; background-color: #2C2F33; font-family: Arial, Helvetica, sans-serif;">
       <table border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -62,7 +62,7 @@ const sendWelcomeEmail = async (user) => {
                 <td align="center" style="padding: 40px 30px; border-bottom: 1px solid #eeeeee;">
                   <h1 style="color: #4a6ee0; font-size: 28px; margin: 0 0 20px 0; font-weight: 700;">¡Bienvenido, ${user.username}!</h1>
                   <p style="color: #333333; font-size: 16px; line-height: 1.6; margin: 0 0 15px 0;">
-                    Gracias por registrarte en nuestra aplicación de chat en tiempo real.
+                    Gracias por registrarte en Yappers.
                   </p>
                   <p style="color: #333333; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
                     Estamos emocionados de tenerte con nosotros. Ya puedes comenzar a chatear y conectar con otros usuarios.
