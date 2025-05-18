@@ -23,18 +23,104 @@ comprobar_requisitos() {
         case "$respuesta" in
             [Ss]|[Ss][Ii]|[Yy]|[Yy][Ee][Ss]|true|TRUE|True)
                 printf "${AZUL}Instalando Docker...${NC}\n"
-                # Ejecutar el script de instalación
-                sudo apt update && \
-                sudo apt install -y ca-certificates curl gnupg && \
-                sudo install -m 0755 -d /etc/apt/keyrings && \
-                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
-                sudo chmod a+r /etc/apt/keyrings/docker.gpg && \
-                echo \
-                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-                  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-                  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-                sudo apt update && \
-                sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+                
+                # Detectar si estamos en Debian o Ubuntu
+                if [ -f /etc/os-release ]; then
+                    . /etc/os-release
+                    OS_NAME=$ID
+                else
+                    OS_NAME="unknown"
+                fi
+                
+                printf "${AZUL}Sistema operativo detectado: ${VERDE}${OS_NAME}${NC}\n"
+                
+                # Instalar dependencias comunes
+                sudo apt update
+                sudo apt install -y ca-certificates curl gnupg lsb-release apt-transport-https
+                
+                # Crear directorio para repositorios
+                sudo install -m 0755 -d /etc/apt/keyrings
+                
+                # Configurar repos según el sistema operativo
+                if [ "$OS_NAME" = "debian" ]; then
+                    # Instalar Docker para Debian
+                    printf "${AZUL}Configurando repositorio para Debian...${NC}\n"
+                    
+                    # Descargar clave GPG
+                    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+                    
+                    # Agregar repo
+                    echo \
+                      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+                      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                    
+                    # Actualizar lista de paquetes
+                    sudo apt update
+                    
+                    # En caso de error con la clave GPG, intentar solución alternativa
+                    if [ $? -ne 0 ]; then
+                        printf "${AMARILLO}Detectado problema con la clave GPG. Intentando solución alternativa...${NC}\n"
+                        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 7EA0A9C3F273FCD8
+                        sudo apt update
+                    fi
+                    
+                    # Instalar Docker - método alternativo si docker-ce no está disponible
+                    if ! apt-cache show docker-ce &>/dev/null; then
+                        printf "${AMARILLO}El paquete docker-ce no está disponible. Intentando instalación alternativa...${NC}\n"
+                        sudo apt install -y docker.io docker-compose
+                    else
+                        sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+                    fi
+                    
+                elif [ "$OS_NAME" = "ubuntu" ]; then
+                    # Instalar Docker para Ubuntu
+                    printf "${AZUL}Configurando repositorio para Ubuntu...${NC}\n"
+                    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+                    
+                    echo \
+                      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                      
+                    # Actualizar e instalar Docker
+                    sudo apt update
+                    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+                else
+                    # Si no es Ubuntu ni Debian, intentar con el método genérico
+                    printf "${AMARILLO}Sistema operativo no reconocido específicamente. Intentando método genérico...${NC}\n"
+                    
+                    # Intentamos detectar la familia de distribución
+                    if [ -f /etc/debian_version ]; then
+                        printf "${AZUL}Detectada distribución basada en Debian...${NC}\n"
+                        
+                        # Primero intentar con docker.io (paquete estándar de Debian)
+                        printf "${AMARILLO}Intentando instalar paquetes de Docker desde los repositorios estándar...${NC}\n"
+                        sudo apt update
+                        sudo apt install -y docker.io docker-compose
+                        
+                        # Si falla, intentar con la configuración manual
+                        if ! command -v docker &> /dev/null; then
+                            printf "${AMARILLO}Intentando configuración manual de repositorios Docker...${NC}\n"
+                            curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                            sudo chmod a+r /etc/apt/keyrings/docker.gpg
+                            
+                            echo \
+                              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+                              $(grep -oP 'VERSION_CODENAME=\K\w+' /etc/os-release || echo 'buster') stable" | \
+                              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                              
+                            sudo apt update
+                            sudo apt install -y docker-ce docker-ce-cli containerd.io
+                        fi
+                    else
+                        printf "${ROJO}No se puede determinar automáticamente cómo instalar Docker en este sistema.${NC}\n"
+                        printf "Por favor, instala Docker manualmente siguiendo las instrucciones en: https://docs.docker.com/get-docker/\n"
+                        exit 1
+                    fi
+                fi
                 
                 # Verificar si la instalación fue exitosa
                 if ! command -v docker &> /dev/null; then
@@ -42,7 +128,10 @@ comprobar_requisitos() {
                     exit 1
                 fi
                 
+                # Añadir usuario actual al grupo docker para no necesitar sudo
+                sudo usermod -aG docker $USER
                 printf "${VERDE}Docker instalado correctamente.${NC}\n"
+                printf "${AMARILLO}NOTA: Es posible que necesites cerrar sesión y volver a iniciarla para usar Docker sin sudo.${NC}\n"
                 ;;
             *)
                 printf "${ROJO}Docker es necesario para ejecutar este script. Instalación cancelada.${NC}\n"
@@ -118,6 +207,7 @@ ADMIN_PASS=""
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
 GOOGLE_CALLBACK_URL=""
+USE_EMAIL=""
 EMAIL_HOST=""
 EMAIL_PORT=""
 EMAIL_SECURE=""
@@ -289,17 +379,32 @@ else
 fi
 pedir_valor "Google Callback URL" "$CALLBACK_DEFAULT" GOOGLE_CALLBACK_URL
 
-# Configuración de Correo Electrónico
+# Preguntar primero si se desea configurar el correo electrónico
 printf "\n${AMARILLO}--- Configuración de Correo Electrónico ---${NC}\n"
-EMAIL_HOST_DEFAULT="mail.${DOMAIN_NAME}"
-pedir_valor "Host de correo" "$EMAIL_HOST_DEFAULT" EMAIL_HOST
-pedir_valor "Puerto SMTP" "587" EMAIL_PORT
-pedir_boolean "¿Usar conexión segura para correo?" "no" EMAIL_SECURE
-EMAIL_USER_DEFAULT="admin@${DOMAIN_NAME}"
-pedir_valor "Usuario de correo" "$EMAIL_USER_DEFAULT" EMAIL_USER
-pedir_valor "Contraseña de correo" "tu-contraseña" EMAIL_PASS false
-pedir_valor "Dirección de origen de correos" "$EMAIL_USER" EMAIL_FROM
-pedir_boolean "¿Rechazar certificados no válidos para correo?" "no" EMAIL_TLS_REJECT
+pedir_boolean "¿Deseas configurar el servidor de correo electrónico?" "no" USE_EMAIL
+
+if [ "$USE_EMAIL" = "true" ]; then
+    # Configuración de Correo Electrónico si el usuario quiere configurarlo
+    EMAIL_HOST_DEFAULT="mail.${DOMAIN_NAME}"
+    pedir_valor "Host de correo" "$EMAIL_HOST_DEFAULT" EMAIL_HOST
+    pedir_valor "Puerto SMTP" "587" EMAIL_PORT
+    pedir_boolean "¿Usar conexión segura para correo?" "no" EMAIL_SECURE
+    EMAIL_USER_DEFAULT="admin@${DOMAIN_NAME}"
+    pedir_valor "Usuario de correo" "$EMAIL_USER_DEFAULT" EMAIL_USER
+    pedir_valor "Contraseña de correo" "tu-contraseña" EMAIL_PASS false
+    pedir_valor "Dirección de origen de correos" "$EMAIL_USER" EMAIL_FROM
+    pedir_boolean "¿Rechazar certificados no válidos para correo?" "no" EMAIL_TLS_REJECT
+else
+    # Valores por defecto si no se configura el correo
+    printf "${AZUL}Omitiendo configuración de correo electrónico. Se usarán valores por defecto.${NC}\n"
+    EMAIL_HOST="localhost"
+    EMAIL_PORT="25"
+    EMAIL_SECURE="false"
+    EMAIL_USER=""
+    EMAIL_PASS=""
+    EMAIL_FROM="noreply@example.com"
+    EMAIL_TLS_REJECT="false"
+fi
 
 printf "\n${VERDE}Creando archivos de configuración...${NC}\n"
 
@@ -986,8 +1091,14 @@ services:
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
       - APP_PORT=${APP_PORT}
     networks:
-      - app-network
+      app-network:
+        aliases:
+          - nginx
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    hostname: nginx
+    container_name: nginx
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:80/"]
       interval: 30s
@@ -1020,8 +1131,14 @@ services:
       mongo:
         condition: service_started
     networks:
-      - app-network
+      app-network:
+        aliases:
+          - app
     restart: always
+    hostname: app
+    container_name: app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${APP_PORT}/"]
       interval: 30s
@@ -1030,8 +1147,8 @@ services:
       start_period: 30s
 
   mongo:
-    image: mongo:latest
-    command: ["--auth"]
+    image: mongo:4.4
+    command: ["--auth", "--bind_ip_all"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
@@ -1042,8 +1159,14 @@ services:
     ports:
       - "27017:27017"
     networks:
-      - app-network
+      app-network:
+        aliases:
+          - mongo
     restart: always
+    hostname: mongo
+    container_name: mongo
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Healthcheck desactivado ya que puede causar problemas en algunas versiones
     # Si necesitas activarlo, descomenta estas líneas y ajústalas según tu versión de MongoDB
     # healthcheck:
@@ -1056,6 +1179,10 @@ services:
 networks:
   app-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
 
 volumes:
   mongo-data:
