@@ -215,6 +215,7 @@ EMAIL_USER=""
 EMAIL_PASS=""
 EMAIL_FROM=""
 EMAIL_TLS_REJECT=""
+APP_URL=""
 
 # Función para generar claves seguras aleatorias
 generar_clave_segura() {
@@ -312,6 +313,14 @@ else
     # Solo preguntar por HTTPS si hay un dominio válido
     pedir_boolean "¿Usar HTTPS con Let's Encrypt?" "si" USE_HTTPS
 fi
+
+# Configurar APP_URL basado en el protocolo y dominio
+if [ "$USE_HTTPS" = "true" ]; then
+    APP_URL="https://${DOMAIN_NAME}"
+else
+    APP_URL="http://${DOMAIN_NAME}"
+fi
+printf "${AZUL}URL de la aplicación configurada como: ${VERDE}${APP_URL}${NC}\n"
 
 # Solicitar correo electrónico para Let's Encrypt solo si se eligió HTTPS y no es localhost
 if [ "$USE_HTTPS" = "true" ]; then
@@ -425,6 +434,7 @@ EMAIL_PASS='${EMAIL_PASS}'
 EMAIL_FROM=${EMAIL_FROM}
 EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
 ADMIN_PASS='${ADMIN_PASS}'
+APP_URL=${APP_URL}
 EOF
 
 # Crear Dockerfile para Nginx
@@ -892,6 +902,7 @@ ADMIN_PASS=********  # Contraseña para acceder al panel de administración en /
 # --- Configuración HTTPS ---
 DOMAIN_NAME=${DOMAIN_NAME}
 USE_HTTPS=${USE_HTTPS}
+APP_URL=${APP_URL}
 
 # ==========================================
 # Fin de Variables de Entorno Locales
@@ -938,6 +949,7 @@ ADMIN_PASS='${ADMIN_PASS}'  # Contraseña para acceder al panel de administraci�
 # --- Configuración HTTPS ---
 DOMAIN_NAME=${DOMAIN_NAME}
 USE_HTTPS=${USE_HTTPS}
+APP_URL=${APP_URL}
 
 # ==========================================
 # Fin de Variables de Entorno Locales
@@ -1059,6 +1071,7 @@ export MONGO_DB
 export DOMAIN_NAME
 export USE_HTTPS
 export LETSENCRYPT_EMAIL
+export APP_URL
 
 # Crear compose.yml actualizado con formato YAML correcto
 cat > compose.yml << EOF
@@ -1122,6 +1135,7 @@ services:
       - EMAIL_FROM=${EMAIL_FROM}
       - EMAIL_TLS_REJECT_UNAUTHORIZED=${EMAIL_TLS_REJECT}
       - ADMIN_PASS=${ADMIN_PASS}
+      - APP_URL=${APP_URL}
     expose:
       - "${APP_PORT}"
     depends_on:
