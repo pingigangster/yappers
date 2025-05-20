@@ -51,6 +51,9 @@ const sendEmail = async (options) => {
  * @returns {Promise} - Promesa con resultado del envío
  */
 const sendWelcomeEmail = async (user) => {
+  // Aseguramos que la URL base termine sin slash para evitar duplicados
+  const baseUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  
   const subject = '¡Bienvenido a Yappers!';
   const html = `
     <body style="margin: 0; padding: 0; background-color: #2C2F33; font-family: Arial, Helvetica, sans-serif;">
@@ -67,7 +70,7 @@ const sendWelcomeEmail = async (user) => {
                   <p style="color: #333333; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
                     Estamos emocionados de tenerte con nosotros. Ya puedes comenzar a chatear y conectar con otros usuarios.
                   </p>
-                  <a href="${process.env.APP_URL || 'http://localhost:3000'}/login" style="background-color: #4a6ee0; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                  <a href="${baseUrl}/login" style="background-color: #4a6ee0; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
                     Ir a la Aplicación
                   </a>
                 </td>
@@ -106,7 +109,9 @@ const sendWelcomeEmail = async (user) => {
  * @returns {Promise} - Promesa con resultado del envío
  */
 const sendPasswordResetEmail = async (user, resetToken) => {
-  const resetUrl = `${process.env.APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+  // Aseguramos que la URL base termine sin slash para evitar duplicados
+  const baseUrl = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
   
   const subject = 'Restablecimiento de Contraseña Solicitado';
   const html = `

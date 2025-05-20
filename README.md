@@ -59,6 +59,20 @@ Sigue estos pasos para poner en marcha la aplicación en tu entorno local:
     JWT_SECRET=TU_SECRETO_JWT_MUY_SEGURO # Cambia esto por una clave segura
     SESSION_SECRET=OTRO_SECRETO_PARA_SESIONES # Cambia esto por otra clave segura
 
+    # IMPORTANTE: URL base de la aplicación para los correos electrónicos
+    # Debe configurarse con la URL completa donde se accede a la aplicación
+    # Ejemplo para producción: https://yappers.es (sin slash al final)
+    APP_URL=http://localhost:3000
+
+    # Configuración de Correo Electrónico
+    EMAIL_HOST=smtp.example.com
+    EMAIL_PORT=587
+    EMAIL_SECURE=false
+    EMAIL_USER=user@example.com
+    EMAIL_PASS=your_password
+    EMAIL_FROM=no-reply@yappers.es
+    EMAIL_TLS_REJECT_UNAUTHORIZED=true
+
     # Configuración de Google OAuth (Opcional - si usas autenticación con Google)
     GOOGLE_CLIENT_ID=TU_GOOGLE_CLIENT_ID
     GOOGLE_CLIENT_SECRET=TU_GOOGLE_CLIENT_SECRET
@@ -66,6 +80,7 @@ Sigue estos pasos para poner en marcha la aplicación en tu entorno local:
     ```
     *   **Nota:** Asegúrate de tener MongoDB instalado y corriendo localmente o usa una instancia en la nube como MongoDB Atlas.
     *   Para obtener las credenciales de Google OAuth, crea un proyecto en [Google Cloud Console](https://console.cloud.google.com/).
+    *   La variable `APP_URL` es fundamental para el funcionamiento correcto de los enlaces en los correos electrónicos de bienvenida y restablecimiento de contraseña. Debe configurarse con la URL exacta donde está desplegada la aplicación.
 
 4.  **Iniciar la Aplicación:**
     *   **Modo Desarrollo (con nodemon para recarga automática):**
